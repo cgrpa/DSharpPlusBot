@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-TheSexy6BotWorker-d23e68fa-7622-4b43-ac67-735c9cf191f4</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ardalis.GuardClauses" Version="5.0.0" />
+    <PackageReference Include="DSharpPlus" Version="5.0.0-nightly-02551" />
+    <PackageReference Include="DSharpPlus.Commands" Version="5.0.0-nightly-02551" />
+    <PackageReference Include="DSharpPlus.Interactivity" Version="4.5.1" />
+    <PackageReference Include="DSharpPlus.SlashCommands" Version="4.5.1" />
+    <PackageReference Include="DSharpPlus.VoiceNext" Version="5.0.0-nightly-02551" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.65.0-alpha" />
+  </ItemGroup>
+</Project>
