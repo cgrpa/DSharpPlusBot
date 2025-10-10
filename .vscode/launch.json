@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "TheSexy6BotWorker",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/TheSexy6BotWorker/bin/Debug/net9.0/TheSexy6BotWorker.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/TheSexy6BotWorker",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "neverOpen",
+            "logging": {
+                "moduleLoad": false
+            }
+        }
+    ]
+}

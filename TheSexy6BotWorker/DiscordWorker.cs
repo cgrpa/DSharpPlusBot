@@ -4,7 +4,6 @@ using DSharpPlus.Commands;
 using DSharpPlus.Commands.Processors.TextCommands;
 using DSharpPlus.Commands.Processors.TextCommands.Parsing;
 using DSharpPlus.Entities;
-using DSharpPlus.VoiceNext;
 using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using System;
@@ -78,11 +77,6 @@ namespace TheSexy6BotWorker
             });
 
             DiscordActivity status = new("ready to rumble, baby.", DiscordActivityType.Competing);
-
-            VoiceNextConfiguration voiceNextConfiguration = new();
-            
-
-            builder.UseVoiceNext(voiceNextConfiguration);
 
             _client = builder.Build();
 
