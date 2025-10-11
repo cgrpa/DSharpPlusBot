@@ -23,4 +23,3 @@ jobs:
         - run: |
             docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
             docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
-            docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
