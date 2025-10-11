@@ -15,7 +15,7 @@ jobs:
           uses: azure/container-apps-deploy-action@v1
           with:
             appSourcePath: ${{ github.workspace }}
-            acrName: prduksdiscordbotacr
+            acrName: prduksdiscordbotacr-b3gugmegdbdefcas
             containerAppName: uks-discordbot-capp
             resourceGroup: uks-discordbot-rg
     
