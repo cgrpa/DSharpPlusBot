@@ -4,7 +4,7 @@ using TheSexy6BotWorker.Services;
 using Microsoft.Extensions.Configuration;
 using Ardalis.GuardClauses;
 using System.Net.Http.Headers;
-using TheSexy6BotWorker.DTO;
+using TheSexy6BotWorker.DTOs;
 
 namespace TheSexy6BotWorker.Tests.Services;
 
@@ -37,7 +37,10 @@ public class PerplexityApiIntegrationTests : IDisposable
     public async Task SearchAsync_ValidQuery_ReturnsResults()
     {
         // Arrange
-        var query = new PerplexitySearchRequest("What is the capital of France?");
+        var query = new PerplexitySearchRequest()
+        {
+            Query = "What is the capital of France?"
+        };
 
         // Act
         var results = await _service.SearchAsync(query);

@@ -22,7 +22,8 @@ namespace TheSexy6BotWorker.Handlers
         };
         private static readonly OpenAIPromptExecutionSettings _promptExecutionSettings = new()
         {
-            MaxTokens = 4096
+            MaxTokens = 4096,
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
         };
 
         private const int MaxMessageLength = 1980;

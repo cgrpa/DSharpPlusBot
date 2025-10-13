@@ -17,7 +17,8 @@
             "internalConsoleOptions": "neverOpen",
             "logging": {
                 "moduleLoad": false
-            }
+            },
+            "requireExactSource": false
         }
     ]
 }

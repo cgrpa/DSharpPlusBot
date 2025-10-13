@@ -1,5 +1,7 @@
 using System.Buffers.Text;
-using TheSexy6BotWorker.DTO;
+using System.ComponentModel;
+using Microsoft.SemanticKernel;
+using TheSexy6BotWorker.DTOs;
 
 namespace TheSexy6BotWorker.Services
 {
@@ -11,9 +13,19 @@ namespace TheSexy6BotWorker.Services
         public PerplexitySearchService(HttpClient httpClient)
         {
             _httpClient = httpClient;
+
+            // Verify the BaseAddress is set
+            if (_httpClient.BaseAddress == null)
+            {
+                _httpClient.BaseAddress = new Uri("https://api.perplexity.ai/");
+                Console.WriteLine("WARNING: HttpClient BaseAddress was null and had to be set manually!");
+            }
             
         }
 
+
+        [KernelFunction("perplexity_search")]
+        [Description("Searches the Perplexity API with the given query and returns results.")]
         public async Task<PerplexitySearchResult> SearchAsync(PerplexitySearchRequest request)
         {
             try
@@ -24,7 +36,7 @@ namespace TheSexy6BotWorker.Services
                     System.Text.Encoding.UTF8,
                     "application/json"
                 );
-
+ 
                 var response = await _httpClient.PostAsync(SearchEndpoint, content);
                 response.EnsureSuccessStatusCode();
 
@@ -35,11 +47,12 @@ namespace TheSexy6BotWorker.Services
                         PropertyNameCaseInsensitive = true
                     });
 
-                return result;
+                return result; 
+
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("An error occurred while searching.", ex);
+                throw new ApplicationException($"Error occurred while searching Perplexity API: {ex.Message}", ex);
             }
         }
     }

@@ -39,12 +39,16 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
+                services.AddHttpClient();
+
+                services.AddHttpClient<PerplexitySearchService>(client =>
+                    {
+                        client.BaseAddress = new Uri("https://api.perplexity.ai");
+                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                            "Bearer", Guard.Against.NullOrEmpty(_configuration["Perplexity:ApiKey"], "Perplexity:ApiKey is null or empty!")
+                        );
+                    });
                 services
-                    .AddGoogleAIGeminiChatCompletion(
-                        modelId: "gemini-2.5-flash-lite",
-                        apiKey: _configuration["GeminiKey"],
-                        serviceId: "gemini"
-                        )
                     .AddSingleton(sp =>
                     {
                         var kernelBuilder = Kernel.CreateBuilder();
@@ -59,15 +63,12 @@ namespace TheSexy6BotWorker
                             endpoint: new Uri("https://api.x.ai/v1/"),
                             serviceId: "grok");
 
+                        var perplexityService = sp.GetRequiredService<PerplexitySearchService>();
+                        kernelBuilder.Plugins.AddFromObject(perplexityService, "PerplexitySearchService");
+    
                         return kernelBuilder.Build();
-                    })
-                    .AddHttpClient<PerplexitySearchService>(client =>
-                    {
-                        client.BaseAddress = new Uri("https://api.perplexity.ai/");
-                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                            "Bearer", _configuration["Perplexity:ApiKey"]
-                        );
                     });
+
             });
             
             builder.ConfigureEventHandlers(
