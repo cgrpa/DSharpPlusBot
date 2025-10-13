@@ -13,6 +13,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TheSexy6BotWorker.Commands;
+using TheSexy6BotWorker.Services;
 
 namespace TheSexy6BotWorker
 {
@@ -59,6 +60,13 @@ namespace TheSexy6BotWorker
                             serviceId: "grok");
 
                         return kernelBuilder.Build();
+                    })
+                    .AddHttpClient<PerplexitySearchService>(client =>
+                    {
+                        client.BaseAddress = new Uri("https://api.perplexity.ai/");
+                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                            "Bearer", _configuration["Perplexity:ApiKey"]
+                        );
                     });
             });
             
