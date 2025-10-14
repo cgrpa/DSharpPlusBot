@@ -38,7 +38,7 @@ namespace TheSexy6BotWorker.Handlers
             if (e.Message.Content.StartsWith("ping", System.StringComparison.OrdinalIgnoreCase))
                 await e.Message.RespondAsync($"pong!");
 
-            if (e.Message.Content.ToLower().StartsWith("test-gemini", System.StringComparison.OrdinalIgnoreCase))
+            if (e.Message.Content.ToLower().StartsWith("gemini", System.StringComparison.OrdinalIgnoreCase))
             {
                 await e.Channel.TriggerTypingAsync();
 
@@ -62,7 +62,7 @@ namespace TheSexy6BotWorker.Handlers
 
             }
 
-            if (e.Message.Content.ToLower().StartsWith("test-grok", System.StringComparison.OrdinalIgnoreCase))
+            if (e.Message.Content.ToLower().StartsWith("grok", System.StringComparison.OrdinalIgnoreCase))
             {
                 await e.Channel.TriggerTypingAsync();
                 var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>(serviceKey: "grok");
