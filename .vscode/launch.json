@@ -18,7 +18,10 @@
             "logging": {
                 "moduleLoad": false
             },
-            "requireExactSource": false
+            "requireExactSource": false,
+            "env": {
+                "LOCAL_DEV": "true"
+            }
         }
     ]
 }
