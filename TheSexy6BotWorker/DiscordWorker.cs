@@ -43,7 +43,7 @@ namespace TheSexy6BotWorker
                     {
                         client.BaseAddress = new Uri("https://api.perplexity.ai");
                         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                            "Bearer", Guard.Against.NullOrEmpty(_configuration["Perplexity:ApiKey"], "Perplexity:ApiKey")
+                            "Bearer", Guard.Against.NullOrEmpty(_configuration["PerplexityApiKey"], "PerplexityApiKey")
                         );
                     });
                 services.AddSingleton<PerplexitySearchService>();
