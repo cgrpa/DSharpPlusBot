@@ -39,7 +39,7 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
-                services.AddHttpClient(nameof(PerplexitySearchService), client =>
+                services.AddHttpClient<PerplexitySearchService>(client =>
                 {
                     client.BaseAddress = new Uri("https://api.perplexity.ai");
                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
