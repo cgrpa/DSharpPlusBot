@@ -46,6 +46,23 @@ namespace TheSexy6BotWorker
                         "Bearer", Guard.Against.NullOrEmpty(_configuration["PerplexityApiKey"], "PerplexityApiKey")
                     );
                 });
+
+                // Add WeatherService with two HttpClients for OpenMeteo APIs
+                services.AddHttpClient("WeatherClient", client =>
+                {
+                    client.BaseAddress = new Uri("https://api.open-meteo.com/v1/");
+                });
+                services.AddHttpClient("GeocodingClient", client =>
+                {
+                    client.BaseAddress = new Uri("https://geocoding-api.open-meteo.com/v1/");
+                });
+                services.AddTransient<WeatherService>(sp =>
+                {
+                    var weatherClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WeatherClient");
+                    var geocodingClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeocodingClient");
+                    return new WeatherService(weatherClient, geocodingClient);
+                });
+
                 services
                     .AddSingleton(sp =>
                     {
@@ -63,6 +80,9 @@ namespace TheSexy6BotWorker
 
                         var perplexityService = sp.GetRequiredService<PerplexitySearchService>();
                         kernelBuilder.Plugins.AddFromObject(perplexityService, "PerplexitySearchService");
+
+                        var weatherService = sp.GetRequiredService<WeatherService>();
+                        kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");
     
                         return kernelBuilder.Build();
                     });
