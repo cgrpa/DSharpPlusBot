@@ -39,14 +39,13 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
-                services.AddHttpClient<PerplexitySearchService>(client =>
-                    {
-                        client.BaseAddress = new Uri("https://api.perplexity.ai");
-                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                            "Bearer", Guard.Against.NullOrEmpty(_configuration["Perplexity:ApiKey"], "Perplexity:ApiKey")
-                        );
-                    });
-                services.AddSingleton<PerplexitySearchService>();
+                services.AddHttpClient(nameof(PerplexitySearchService), client =>
+                {
+                    client.BaseAddress = new Uri("https://api.perplexity.ai");
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                        "Bearer", Guard.Against.NullOrEmpty(_configuration["PerplexityApiKey"], "PerplexityApiKey")
+                    );
+                });
                 services
                     .AddSingleton(sp =>
                     {

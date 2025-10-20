@@ -27,7 +27,7 @@ public class PerplexityApiIntegrationTests : IDisposable
             BaseAddress = new Uri("https://api.perplexity.ai/")
         };
 
-        string apiKey = Guard.Against.NullOrEmpty(_configuration["Perplexity:ApiKey"], "API key not found in configuration.");
+        string apiKey = Guard.Against.NullOrEmpty(_configuration["PerplexityApiKey"], "API key not found in configuration.");
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         _service = new PerplexitySearchService(_httpClient);

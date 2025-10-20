@@ -11,6 +11,7 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Connectors.Google;
 using DSharpPlus.Entities;
+using Microsoft.Extensions.AI;
 
 namespace TheSexy6BotWorker.Handlers
 {
@@ -97,7 +98,7 @@ namespace TheSexy6BotWorker.Handlers
                         else
                             chatHistory.AddUserMessage($"{msg.Author.Username}: {msg.Content}");
                     }
-                } 
+                }
 
                 chatHistory.AddUserMessage($"{e.Message.Author.Username}: {e.Message.Content}");
 
@@ -113,7 +114,7 @@ namespace TheSexy6BotWorker.Handlers
                 }
             }
         }
-
+        
         private static async Task SendChunkedMessageAsync(MessageCreatedEventArgs e, string content)
         {
 
