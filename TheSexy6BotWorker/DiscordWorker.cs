@@ -73,7 +73,7 @@ namespace TheSexy6BotWorker
                             serviceId: "gemini");
 
                         kernelBuilder.AddOpenAIChatCompletion(
-                            modelId: "grok-3-mini",
+                            modelId: "grok-4-fast-non-reasoning",
                             apiKey: _configuration["GrokKey"],
                             endpoint: new Uri("https://api.x.ai/v1/"),
                             serviceId: "grok");
@@ -83,9 +83,12 @@ namespace TheSexy6BotWorker
 
                         var weatherService = sp.GetRequiredService<WeatherService>();
                         kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");
-    
+
                         return kernelBuilder.Build();
                     });
+
+                // Add DynamicStatusService as singleton
+                services.AddSingleton<DynamicStatusService>();
 
             });
             
@@ -103,10 +106,13 @@ namespace TheSexy6BotWorker
                 extension.AddProcessor(textCommandProcessor);
             });
 
-            DiscordActivity status = new("ready to rumble, baby.", DiscordActivityType.Competing);
-
             _client = builder.Build();
 
+            // Initialize dynamic status service
+            var statusService = _client.ServiceProvider.GetRequiredService<DynamicStatusService>();
+            statusService.Initialize(_client);
+
+            DiscordActivity status = new("booting up my sarcasm module...", DiscordActivityType.Custom);
             await _client.ConnectAsync(status, DiscordUserStatus.Online);
 
             // Wait until cancelled

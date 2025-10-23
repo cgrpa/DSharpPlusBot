@@ -12,6 +12,7 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Connectors.Google;
 using DSharpPlus.Entities;
 using Microsoft.Extensions.AI;
+using TheSexy6BotWorker.Services;
 
 namespace TheSexy6BotWorker.Handlers
 {
@@ -19,6 +20,7 @@ namespace TheSexy6BotWorker.Handlers
     {
         private string _devPrefix = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LOCAL_DEV")) ? "" : "test-";
         private readonly Kernel _kernel;
+        private readonly DynamicStatusService _statusService;
         private static readonly GeminiPromptExecutionSettings _geminiSettings = new()
         {
             MaxTokens = 4096
@@ -32,9 +34,10 @@ namespace TheSexy6BotWorker.Handlers
         private const int MaxMessageLength = 1980;
 
 
-        public MessageCreatedHandler(Kernel kernel)
+        public MessageCreatedHandler(Kernel kernel, DynamicStatusService statusService)
         {
             _kernel = Guard.Against.Null(kernel, nameof(kernel));
+            _statusService = Guard.Against.Null(statusService, nameof(statusService));
         }
         public async Task HandleEventAsync(DiscordClient client, MessageCreatedEventArgs e)
         {
@@ -96,17 +99,30 @@ namespace TheSexy6BotWorker.Handlers
                         if (msg.Author.IsBot)
                             chatHistory.AddAssistantMessage(msg.Content);
                         else
-                            chatHistory.AddUserMessage($"{msg.Author.Username}: {msg.Content}");
+                        {
+                            var formattedMessage = FormatMessageWithAttachments(msg, $"{msg.Author.Username}: ");
+                            chatHistory.AddUserMessage(formattedMessage);
+
+                            // Add separate image messages if there are image attachments
+                            await AddImageMessagesAsync(chatHistory, msg);
+                        }
                     }
                 }
 
-                chatHistory.AddUserMessage($"{e.Message.Author.Username}: {e.Message.Content}");
+                var currentMessage = FormatMessageWithAttachments(e.Message, $"{e.Message.Author.Username}: ");
+                chatHistory.AddUserMessage(currentMessage);
+
+                // Add separate image messages if there are image attachments
+                await AddImageMessagesAsync(chatHistory, e.Message);
 
                 var response = await chatCompletionService.GetChatMessageContentAsync(chatHistory, kernel: _kernel, executionSettings: _promptExecutionSettings);
 
                 try
                 {
                     await SendChunkedMessageAsync(e, response.Content);
+
+                    // Record interaction for dynamic status updates
+                    await _statusService.RecordInteraction(e.Message.Content, response.Content ?? string.Empty);
                 }
                 catch (Exception ex)
                 {
@@ -163,6 +179,124 @@ namespace TheSexy6BotWorker.Handlers
             }
 
             return chain;
+        }
+
+        private static string FormatMessageWithAttachments(DiscordMessage message, string prefix = "")
+        {
+            var messageBuilder = new StringBuilder();
+            messageBuilder.Append($"{prefix}{message.Content}");
+
+            // Add attachment URLs
+            if (message.Attachments.Any())
+            {
+                messageBuilder.AppendLine();
+                messageBuilder.AppendLine("[Attachments:]");
+                foreach (var attachment in message.Attachments)
+                {
+                    messageBuilder.AppendLine($"- {attachment.FileName}: {attachment.Url}");
+                }
+            }
+
+            // Add embed information
+            if (message.Embeds.Any())
+            {
+                messageBuilder.AppendLine();
+                messageBuilder.AppendLine("[Embeds:]");
+                foreach (var embed in message.Embeds)
+                {
+                    if (!string.IsNullOrEmpty(embed.Title))
+                        messageBuilder.AppendLine($"- Title: {embed.Title}");
+                    if (!string.IsNullOrEmpty(embed.Description))
+                        messageBuilder.AppendLine($"- Description: {embed.Description}");
+                    if (embed.Url != null)
+                        messageBuilder.AppendLine($"- URL: {embed.Url}");
+                    if (embed.Image?.Url != null)
+                        messageBuilder.AppendLine($"- Image: {embed.Image.Url}");
+                    if (embed.Thumbnail?.Url != null)
+                        messageBuilder.AppendLine($"- Thumbnail: {embed.Thumbnail.Url}");
+                }
+            }
+
+            return messageBuilder.ToString();
+        }
+
+        private static async Task AddImageMessagesAsync(ChatHistory chatHistory, DiscordMessage message)
+        {
+            var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp" };
+
+            foreach (var attachment in message.Attachments)
+            {
+                // Check if it's an image
+                var extension = Path.GetExtension(attachment.FileName).ToLower();
+                if (!imageExtensions.Contains(extension))
+                    continue;
+
+                try
+                {
+                    // Try using the URL directly first (some APIs prefer this)
+                    var imageContent = new ChatMessageContentItemCollection
+                    {
+                        new Microsoft.SemanticKernel.ImageContent(new Uri(attachment.Url))
+                    };
+
+                    chatHistory.AddUserMessage(imageContent);
+                }
+                catch (Exception)
+                {
+                    // If direct URL doesn't work, try base64
+                    try
+                    {
+                        using var httpClient = new HttpClient();
+                        var imageBytes = await httpClient.GetByteArrayAsync(attachment.Url);
+                        var base64Image = Convert.ToBase64String(imageBytes);
+
+                        // Determine MIME type
+                        var mimeType = extension switch
+                        {
+                            ".jpg" or ".jpeg" => "image/jpeg",
+                            ".png" => "image/png",
+                            ".gif" => "image/gif",
+                            ".webp" => "image/webp",
+                            ".bmp" => "image/bmp",
+                            _ => "image/jpeg"
+                        };
+
+                        var imageContentBase64 = new ChatMessageContentItemCollection
+                        {
+                            new Microsoft.SemanticKernel.ImageContent(new Uri($"data:{mimeType};base64,{base64Image}"))
+                        };
+
+                        chatHistory.AddUserMessage(imageContentBase64);
+                    }
+                    catch (Exception)
+                    {
+                        continue;
+                    }
+                }
+            }
+
+            // Also check embeds for images
+            foreach (var embed in message.Embeds)
+            {
+                var imageUrl = embed.Image?.Url?.ToString() ?? embed.Thumbnail?.Url?.ToString();
+                if (string.IsNullOrEmpty(imageUrl))
+                    continue;
+
+                try
+                {
+                    // Try direct URL first
+                    var imageContent = new ChatMessageContentItemCollection
+                    {
+                        new Microsoft.SemanticKernel.ImageContent(new Uri(imageUrl))
+                    };
+
+                    chatHistory.AddUserMessage(imageContent);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+            }
         }
 
     }
