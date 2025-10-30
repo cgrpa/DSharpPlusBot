@@ -47,8 +47,7 @@ jobs:
       - name: 'Build and push Docker images'
         run: |
           docker build . \
-            -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
-          docker build . \
+            -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }} \
             -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
           docker push \
             ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
@@ -60,6 +59,5 @@ jobs:
         with:
           containerAppName: ${{ secrets.AZURE_CONTAINER_APP_NAME }}
           resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          imageToDeploy: |
-            ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
+          imageToDeploy: ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
 
