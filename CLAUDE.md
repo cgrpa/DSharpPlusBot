@@ -145,4 +145,42 @@ Only Grok is configured with `FunctionChoiceBehavior.Auto()` for automatic funct
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/docker-ci.yml`) builds and pushes Docker images to Azure Container Registry on every push. Images are tagged with both commit SHA and `latest`.
+### Workflow Structure
+
+The GitHub Actions workflow (`.github/workflows/docker-ci.yml`) implements a two-stage pipeline:
+
+**Stage 1: Test** (Quality Gate)
+- Runs on every push to any branch
+- Builds the .NET solution
+- Executes Weather API integration tests (requires network access)
+- Must pass before Stage 2 can run
+
+**Stage 2: Build and Deploy** (Only if tests pass)
+- Builds Docker images tagged with commit SHA and `latest`
+- Pushes images to Azure Container Registry (ACR)
+- Deploys to Azure Container Apps with a new revision using the commit SHA image
+
+### Test Strategy
+
+The CI/CD pipeline runs Weather API integration tests because:
+- They don't require API keys (use public Open-Meteo API)
+- They validate real service integration
+- Perplexity tests are skipped (require `PerplexityApiKey` secret)
+
+### Required Secrets
+
+Configure these in GitHub repository settings:
+- `AZURE_CREDENTIALS` - Azure service principal for authentication
+- `REGISTRY_LOGIN_SERVER` - ACR URL
+- `REGISTRY_USERNAME` - ACR username
+- `REGISTRY_PASSWORD` - ACR password
+- `AZURE_CONTAINER_APP_NAME` - Target container app name
+- `AZURE_RESOURCE_GROUP` - Azure resource group
+
+### Deployment Flow
+
+```
+Push to GitHub → Run Tests → Build Docker Images → Push to ACR → Deploy to Container Apps
+                      ↓                                                      ↓
+                   If fail: STOP                                    New revision with latest image
+```
