@@ -3,7 +3,28 @@ on: [push]
 name: Docker_CI
 
 jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+        - name: 'Checkout GitHub Action'
+          uses: actions/checkout@main
+        
+        - name: 'Setup .NET'
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: '9.0.x'
+        
+        - name: 'Restore dependencies'
+          run: dotnet restore TheSexy6BotWorker.sln
+        
+        - name: 'Build solution'
+          run: dotnet build TheSexy6BotWorker.sln --no-restore
+        
+        - name: 'Run tests'
+          run: dotnet test TheSexy6BotWorker.sln --no-build --filter "FullyQualifiedName~Weather" --verbosity normal
+
     build-and-deploy:
+        needs: test
         runs-on: ubuntu-latest
         steps:
         # checkout the repo
@@ -26,3 +47,10 @@ jobs:
             docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
             docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
             docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
+        
+        - name: 'Deploy to Azure Container Apps'
+          uses: azure/container-apps-deploy-action@v1
+          with:
+            containerAppName: ${{ secrets.AZURE_CONTAINER_APP_NAME }}
+            resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
+            imageToDeploy: ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
