@@ -9,6 +9,15 @@ namespace TheSexy6BotWorker
         {
             var builder = Host.CreateApplicationBuilder(args);
             builder.Configuration.AddUserSecrets<Program>();
+            // Ensure console logs include Debug by default unless overridden by env
+            builder.Logging.ClearProviders();
+            builder.Logging.AddSimpleConsole(o =>
+            {
+                o.SingleLine = true;
+                o.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+                o.IncludeScopes = false;
+            });
+            builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
             builder.Services
                 .AddHostedService<DiscordWorker>();

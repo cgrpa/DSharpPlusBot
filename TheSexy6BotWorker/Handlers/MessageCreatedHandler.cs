@@ -13,6 +13,7 @@ using Microsoft.SemanticKernel.Connectors.Google;
 using DSharpPlus.Entities;
 using Microsoft.Extensions.AI;
 using TheSexy6BotWorker.Services;
+using System.Text.RegularExpressions;
 
 namespace TheSexy6BotWorker.Handlers
 {
@@ -130,7 +131,7 @@ namespace TheSexy6BotWorker.Handlers
                 }
             }
         }
-        
+
         private static async Task SendChunkedMessageAsync(MessageCreatedEventArgs e, string content)
         {
 
@@ -156,7 +157,7 @@ namespace TheSexy6BotWorker.Handlers
                 await e.Message.RespondAsync($"{prefix}{chunk}{suffix}");
             }
         }
-        
+
         async Task<List<DiscordMessage>> GetReplyChainAsync(DiscordMessage leaf, int maxDepth = 10)
         {
             var chain = new List<DiscordMessage>();
@@ -219,6 +220,7 @@ namespace TheSexy6BotWorker.Handlers
 
             return messageBuilder.ToString();
         }
+
 
         private static async Task AddImageMessagesAsync(ChatHistory chatHistory, DiscordMessage message)
         {
@@ -298,6 +300,19 @@ namespace TheSexy6BotWorker.Handlers
                 }
             }
         }
+        
+        private static string[] ExtractDiscordLinks(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return Array.Empty<string>();
 
-    }
+            // Matches cdn.discordapp.com or media.discordapp.net links
+            var pattern = @"https:\/\/(?:cdn|media)\.discordapp\.(?:com|net)\/[^\s]+";
+            var matches = Regex.Matches(input, pattern, RegexOptions.IgnoreCase);
+
+            return matches.Cast<Match>().Select(m => m.Value).ToArray();
+        }
+
+
+    }   
 }

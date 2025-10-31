@@ -20,7 +20,8 @@
             },
             "requireExactSource": false,
             "env": {
-                "LOCAL_DEV": "true"
+                "LOCAL_DEV": "true",
+                "DYLD_LIBRARY_PATH": "/opt/homebrew/lib"
             }
         }
     ]

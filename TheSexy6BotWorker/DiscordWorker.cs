@@ -4,6 +4,7 @@ using DSharpPlus.Commands;
 using DSharpPlus.Commands.Processors.TextCommands;
 using DSharpPlus.Commands.Processors.TextCommands.Parsing;
 using DSharpPlus.Entities;
+using DSharpPlus.VoiceNext;
 using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using System;
@@ -34,7 +35,9 @@ namespace TheSexy6BotWorker
 
             var builder = DiscordClientBuilder.CreateDefault(
                 _configuration["DiscordToken"],
-                DiscordIntents.AllUnprivileged | DiscordIntents.MessageContents);
+                DiscordIntents.AllUnprivileged
+                | DiscordIntents.MessageContents
+                | DiscordIntents.GuildVoiceStates);
 
 
             builder.ConfigureServices(services =>
@@ -90,14 +93,30 @@ namespace TheSexy6BotWorker
                 // Add DynamicStatusService as singleton
                 services.AddSingleton<DynamicStatusService>();
 
+                // Add Voice services for Realtime API integration
+                services.AddSingleton<AudioConverter>();
+                services.AddSingleton(sp => new RealtimeService(
+                    _configuration,
+                    sp.GetRequiredService<ILogger<RealtimeService>>(),
+                    sp.GetRequiredService<AudioConverter>(),
+                    sp.GetRequiredService<Kernel>()
+                ));
+                services.AddSingleton<VoiceService>();
+
             });
             
             builder.ConfigureEventHandlers(
                 b => b.AddEventHandlers<Handlers.MessageCreatedHandler>(ServiceLifetime.Singleton));
 
+            // Enable VoiceNext for voice channel support
+            builder.UseVoiceNext(new VoiceNextConfiguration
+            {
+                EnableIncoming = true // Enable receiving audio from users,
+            });
+
             builder.UseCommands((IServiceProvider serviceProvider, CommandsExtension extension) =>
             {
-                extension.AddCommands([typeof(PingCommand)]);
+                extension.AddCommands([typeof(PingCommand), typeof(VoiceCommand)]);
                 TextCommandProcessor textCommandProcessor = new(new()
                 {
                     PrefixResolver = new DefaultPrefixResolver(true, "/").ResolvePrefixAsync,

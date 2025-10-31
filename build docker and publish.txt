@@ -1,3 +1,7 @@
 docker buildx build --platform linux/amd64 \
   -t thesexy6botregistry.azurecr.io/thesexy6bot:v1.0.0 \
   --push .
+
+
+  docker buildx build --platform linux/amd64 -t sexy6-worker .
+  docker run --rm --platform linux/amd64 --env-file .env sexy6-worker
