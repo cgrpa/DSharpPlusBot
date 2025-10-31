@@ -23,9 +23,11 @@ jobs:
         run: dotnet build TheSexy6BotWorker.sln --no-restore
 
       - name: 'Run tests'
+        env:
+          PerplexityApiKey: ${{ secrets.PERPLEXITY_API_KEY }}
         run: |
           dotnet test TheSexy6BotWorker.sln --no-build \
-            --filter "FullyQualifiedName~Weather" --verbosity normal
+            --filter "Category=Integration" --verbosity normal
 
   build-and-deploy:
     needs: test

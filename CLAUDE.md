@@ -152,7 +152,7 @@ The GitHub Actions workflow (`.github/workflows/docker-ci.yml`) implements a two
 **Stage 1: Test** (Quality Gate)
 - Runs on every push to any branch
 - Builds the .NET solution
-- Executes Weather API integration tests (requires network access)
+- Executes all integration tests (Weather API and Perplexity API)
 - Must pass before Stage 2 can run
 
 **Stage 2: Build and Deploy** (Only if tests pass)
@@ -162,10 +162,10 @@ The GitHub Actions workflow (`.github/workflows/docker-ci.yml`) implements a two
 
 ### Test Strategy
 
-The CI/CD pipeline runs Weather API integration tests because:
-- They don't require API keys (use public Open-Meteo API)
-- They validate real service integration
-- Perplexity tests are skipped (require `PerplexityApiKey` secret)
+The CI/CD pipeline runs all integration tests:
+- **Weather API tests**: Use public Open-Meteo API (no authentication required)
+- **Perplexity API tests**: Use Perplexity search API (requires `PERPLEXITY_API_KEY` secret)
+- Both validate real service integration and API connectivity
 
 ### Required Secrets
 
@@ -176,6 +176,7 @@ Configure these in GitHub repository settings:
 - `REGISTRY_PASSWORD` - ACR password
 - `AZURE_CONTAINER_APP_NAME` - Target container app name
 - `AZURE_RESOURCE_GROUP` - Azure resource group
+- `PERPLEXITY_API_KEY` - Perplexity API key for integration tests
 
 ### Deployment Flow
 

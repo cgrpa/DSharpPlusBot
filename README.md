@@ -13,7 +13,7 @@ The project uses GitHub Actions for continuous integration and deployment:
    - Sets up .NET 9.0
    - Restores dependencies
    - Builds the solution
-   - Runs integration tests (Weather API tests)
+   - Runs all integration tests (Weather API and Perplexity API)
 
 2. **Build and Deploy Job** - Only runs if tests pass
    - Builds Docker images (tagged with commit SHA and `latest`)
@@ -30,6 +30,7 @@ Configure the following secrets in your repository settings:
 - `REGISTRY_PASSWORD` - ACR password
 - `AZURE_CONTAINER_APP_NAME` - Name of the Azure Container App
 - `AZURE_RESOURCE_GROUP` - Azure resource group name
+- `PERPLEXITY_API_KEY` - API key for Perplexity search integration tests
 
 ### Quality Gate
 
