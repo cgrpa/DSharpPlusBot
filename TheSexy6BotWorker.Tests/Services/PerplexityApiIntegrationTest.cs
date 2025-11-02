@@ -20,6 +20,7 @@ public class PerplexityApiIntegrationTests : IDisposable
         _configuration = new ConfigurationBuilder()
             .AddJsonFile("appsettings.json", optional: false)
             .AddUserSecrets<PerplexityApiIntegrationTests>()
+            .AddEnvironmentVariables()
             .Build();
 
         _httpClient = new HttpClient
