@@ -20,6 +20,7 @@ public class PerplexityKernelIntegrationTest : IDisposable
         _configuration = new ConfigurationBuilder()
             .AddJsonFile("appsettings.json", optional: false)
             .AddUserSecrets<PerplexityKernelIntegrationTest>()
+            .AddEnvironmentVariables()
             .Build();
 
         _httpClient = new HttpClient
