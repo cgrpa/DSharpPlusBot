@@ -2,6 +2,14 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/runtime:9.0 AS base
+
+# Install native dependencies for voice integration
+RUN apt-get update && apt-get install -y \
+    libopus0 \
+    libsodium23 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 USER $APP_UID
 WORKDIR /app
 
@@ -22,7 +30,23 @@ ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./TheSexy6BotWorker.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
-FROM base AS final
+FROM mcr.microsoft.com/dotnet/runtime:9.0 AS final
+
+# Install native dependencies for voice integration (production)
+RUN apt-get update && apt-get install -y \
+    libopus0 \
+    libsodium23 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+# Make libsodium/libopus visible where .NET actually looks (/app)
+RUN set -e; \
+    LIBSODIUM_PATH="$(find /usr/lib /lib -name 'libsodium.so.*' | head -n1)" && \
+    LIBOPUS_PATH="$(find /usr/lib /lib -name 'libopus.so.*' | head -n1)" && \
+    cp "$LIBSODIUM_PATH" ./libsodium.so && \
+    cp "$LIBOPUS_PATH" ./libopus.so
+    
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "TheSexy6BotWorker.dll"]

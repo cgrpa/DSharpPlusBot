@@ -17,5 +17,44 @@
                 "isDefault": true
             }
         }
+        {
+            "label": "docker-build-sexy6botworker",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+              "build",
+              "-t",
+              "sexy6botworker:dev",
+              "."
+            ],
+            "options": {
+              "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+              "kind": "build",
+              "isDefault": true
+            }
+          },
+          {
+            "label": "docker-run-sexy6botworker",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+              "run",
+              "--rm",
+              "--name",
+              "sexy6botworker-dev",
+              "--env-file",
+              ".env",
+              "sexy6botworker:dev"
+            ],
+            "options": {
+              "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "dependsOn": "docker-build-sexy6botworker",
+            "isBackground": false
+          }
     ]
 }

@@ -1,6 +1,3 @@
-using Microsoft.SemanticKernel;
-using TheSexy6BotWorker.Handlers;
-
 namespace TheSexy6BotWorker
 {
     public class Program
@@ -12,8 +9,6 @@ namespace TheSexy6BotWorker
 
             builder.Services
                 .AddHostedService<DiscordWorker>();
-
-
 
             var host = builder.Build();
             host.Run();

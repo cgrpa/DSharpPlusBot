@@ -8,15 +8,25 @@
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
+<ItemGroup Condition="'$(OS)' == 'Unix' AND '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">
+  <None Include="/opt/homebrew/lib/libsodium.dylib">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+  <None Include="/opt/homebrew/lib/libopus.dylib">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Ardalis.GuardClauses" Version="5.0.0" />
     <PackageReference Include="DSharpPlus" Version="5.0.0-nightly-02551" />
     <PackageReference Include="DSharpPlus.Commands" Version="5.0.0-nightly-02551" />
-    <PackageReference Include="DSharpPlus.Interactivity" Version="4.5.1" />
-    <PackageReference Include="DSharpPlus.SlashCommands" Version="4.5.1" />
+    <PackageReference Include="DSharpPlus.VoiceNext" Version="5.0.0-nightly-02551" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.65.0-alpha" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="OpenAI" Version="2.4.0" />
   </ItemGroup>
 </Project>

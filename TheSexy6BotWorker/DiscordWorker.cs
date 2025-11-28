@@ -4,6 +4,7 @@ using DSharpPlus.Commands;
 using DSharpPlus.Commands.Processors.TextCommands;
 using DSharpPlus.Commands.Processors.TextCommands.Parsing;
 using DSharpPlus.Entities;
+using DSharpPlus.VoiceNext;
 using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using System;
@@ -39,6 +40,9 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
+                // Register IConfiguration so it's available in Discord's DI container
+                services.AddSingleton<IConfiguration>(_configuration);
+
                 services.AddHttpClient<PerplexitySearchService>(client =>
                 {
                     client.BaseAddress = new Uri("https://api.perplexity.ai");
@@ -90,20 +94,39 @@ namespace TheSexy6BotWorker
                 // Add DynamicStatusService as singleton
                 services.AddSingleton<DynamicStatusService>();
 
+                // Register voice integration services
+                services.AddTransient<Services.Voice.AudioConverter>();
+                services.AddSingleton<Services.Voice.IVoiceSessionService, Services.Voice.VoiceSessionService>();
+
+                // Register OpenAI Realtime client factory
+                services.AddTransient<Services.Voice.IOpenAIRealtimeClient>(sp =>
+                {
+                    var logger = sp.GetRequiredService<ILogger<Services.Voice.OpenAIRealtimeClient>>();
+                    var config = sp.GetRequiredService<IConfiguration>();
+                    var apiKey = config["OpenAiApiKey"] ?? throw new InvalidOperationException("OpenAIApiKey not configured");
+                    return new Services.Voice.OpenAIRealtimeClient(logger, apiKey);
+                });
+
             });
-            
+
             builder.ConfigureEventHandlers(
                 b => b.AddEventHandlers<Handlers.MessageCreatedHandler>(ServiceLifetime.Singleton));
 
             builder.UseCommands((IServiceProvider serviceProvider, CommandsExtension extension) =>
             {
-                extension.AddCommands([typeof(PingCommand)]);
+                extension.AddCommands([typeof(PingCommand), typeof(Commands.VoiceCommands)]);
                 TextCommandProcessor textCommandProcessor = new(new()
                 {
                     PrefixResolver = new DefaultPrefixResolver(true, "/").ResolvePrefixAsync,
                 });
 
                 extension.AddProcessor(textCommandProcessor);
+            });
+
+            // Register VoiceNext extension for voice channel integration
+            builder.UseVoiceNext(new VoiceNextConfiguration
+            {
+                EnableIncoming = true // Required for receiving user audio
             });
 
             _client = builder.Build();
