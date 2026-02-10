@@ -13,6 +13,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TheSexy6BotWorker.Commands;
+using TheSexy6BotWorker.Configuration;
+using TheSexy6BotWorker.Contracts;
 using TheSexy6BotWorker.Services;
 
 namespace TheSexy6BotWorker
@@ -39,6 +41,23 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
+                // Determine environment prefix for bot commands
+                var environmentPrefix = Environment.GetEnvironmentVariable("Environment") == "Development" ? "" : "test-";
+
+                // Register bot registry and configurations
+                services.AddSingleton(sp =>
+                {
+                    var registry = new BotRegistry();
+                    
+                    // Register Gemini bot
+                    registry.Register(new GeminiBotConfiguration(environmentPrefix));
+                    
+                    // Register Grok bot
+                    registry.Register(new GrokBotConfiguration(environmentPrefix));
+                    
+                    return registry;
+                });
+
                 services.AddHttpClient<PerplexitySearchService>(client =>
                 {
                     client.BaseAddress = new Uri("https://api.perplexity.ai");
@@ -89,6 +108,9 @@ namespace TheSexy6BotWorker
 
                 // Add DynamicStatusService as singleton
                 services.AddSingleton<DynamicStatusService>();
+                
+                // Add ConversationSessionManager for engagement mode
+                services.AddSingleton<IConversationSessionManager, ConversationSessionManager>();
 
             });
             
