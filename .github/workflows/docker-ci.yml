@@ -40,6 +40,14 @@ jobs:
             --name ${{ secrets.CONTAINER_APP_NAME }} \
             --resource-group ${{ secrets.RESOURCE_GROUP_NAME }} \
             --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }} \
-            --output table
+            --output table || {
+              echo "ERROR: Failed to update Container App."
+              echo "Please verify that:"
+              echo "  1. CONTAINER_APP_NAME secret is set to the correct Container App name"
+              echo "  2. RESOURCE_GROUP_NAME secret is set to the correct resource group"
+              echo "  3. The service principal has 'Contributor' or 'Container Apps Contributor' role"
+              echo "  4. The Container App exists and is accessible"
+              exit 1
+            }
           
           echo "Container App updated successfully. New revision created with image tag: ${{ github.sha }}"

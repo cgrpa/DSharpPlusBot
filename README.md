@@ -237,8 +237,8 @@ The project uses GitHub Actions to automatically build, push to ACR, and deploy 
 | `REGISTRY_LOGIN_SERVER` | ACR login server (e.g., `thesexy6botregistry.azurecr.io`) | Azure Portal → Container Registry → Login server |
 | `REGISTRY_USERNAME` | ACR username | Azure Portal → Container Registry → Access keys |
 | `REGISTRY_PASSWORD` | ACR password or access token | Azure Portal → Container Registry → Access keys |
-| `CONTAINER_APP_NAME` | Azure Container App name | `az containerapp list --query "[].name" -o tsv` |
-| `RESOURCE_GROUP_NAME` | Azure resource group containing the Container App | `az group list --query "[].name" -o tsv` |
+| `CONTAINER_APP_NAME` | Azure Container App name | `az containerapp list --query "[].name" -o tsv` (look for your app) or Azure Portal |
+| `RESOURCE_GROUP_NAME` | Azure resource group containing the Container App | `az containerapp show --name <app-name> --query "resourceGroup" -o tsv` or Azure Portal |
 
 > **Note**: These secrets must reference existing Azure resources. Ensure your Container App is already deployed before configuring the workflow. The workflow will update the existing Container App with new images.
 
