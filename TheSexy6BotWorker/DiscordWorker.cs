@@ -42,7 +42,7 @@ namespace TheSexy6BotWorker
             builder.ConfigureServices(services =>
             {
                 // Determine environment prefix for bot commands
-                var environmentPrefix = Environment.GetEnvironmentVariable("Environment") == "Development" ? "" : "test-";
+                var environmentPrefix = Environment.GetEnvironmentVariable("Environment") == "Development" ? "test-" : "";
 
                 // Register bot registry and configurations
                 services.AddSingleton(sp =>
