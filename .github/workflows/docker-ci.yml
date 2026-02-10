@@ -32,6 +32,9 @@ jobs:
       
       - name: 'Update Container App'
         run: |
+          echo "Verifying Azure CLI authentication..."
+          az account show --output table
+          
           echo "Updating Container App with new image..."
           az containerapp update \
             --name ${{ secrets.CONTAINER_APP_NAME }} \
