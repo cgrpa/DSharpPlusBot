@@ -12,10 +12,14 @@ namespace TheSexy6BotWorker.Services
         private readonly Kernel _kernel;
         private DiscordClient? _discordClient;
         private DateTime _lastInteractionTime = DateTime.MinValue;
+        private DateTime _lastStatusUpdateTime = DateTime.MinValue;
         private Timer? _statusUpdateTimer;
         private readonly TimeSpan _idleThreshold = TimeSpan.FromMinutes(15);
         private readonly TimeSpan _statusCheckInterval = TimeSpan.FromMinutes(5);
-        private string _lastConversationSummary = string.Empty;
+        private readonly TimeSpan _minStatusUpdateInterval = TimeSpan.FromMinutes(2); // Minimum time between status updates
+        private readonly int _messageBatchSize = 5; // Number of messages to batch before updating
+        private readonly Queue<string> _recentInteractions = new();
+        private readonly object _lock = new();
 
         private readonly string[] _idleStatuses = new[]
         {
@@ -49,10 +53,37 @@ namespace TheSexy6BotWorker.Services
         public async Task RecordInteraction(string userMessage, string botResponse)
         {
             _lastInteractionTime = DateTime.UtcNow;
-            _lastConversationSummary = $"User: {TruncateMessage(userMessage)}\nBot: {TruncateMessage(botResponse)}";
+            
+            // Add to recent interactions queue
+            var interaction = $"User: {TruncateMessage(userMessage, 100)}\nBot: {TruncateMessage(botResponse, 150)}";
+            
+            bool shouldUpdate = false;
+            string conversationSummary;
+            
+            lock (_lock)
+            {
+                _recentInteractions.Enqueue(interaction);
+                
+                // Keep only last N interactions
+                while (_recentInteractions.Count > _messageBatchSize)
+                {
+                    _recentInteractions.Dequeue();
+                }
+                
+                // Check if we should update: either batch is full OR enough time has passed
+                var timeSinceLastUpdate = DateTime.UtcNow - _lastStatusUpdateTime;
+                shouldUpdate = _recentInteractions.Count >= _messageBatchSize || 
+                               timeSinceLastUpdate >= _minStatusUpdateInterval;
+                
+                // Build summary from all recent interactions
+                conversationSummary = string.Join("\n---\n", _recentInteractions);
+            }
 
-            // Update status based on the conversation
-            await UpdateStatusBasedOnConversation(userMessage, botResponse);
+            // Update status if conditions met
+            if (shouldUpdate)
+            {
+                await UpdateStatusBasedOnConversation(conversationSummary);
+            }
         }
 
         private async void CheckAndUpdateStatus(object? state)
@@ -72,19 +103,29 @@ namespace TheSexy6BotWorker.Services
             }
         }
 
-        private async Task UpdateStatusBasedOnConversation(string userMessage, string botResponse)
+        private async Task UpdateStatusBasedOnConversation(string conversationSummary)
         {
             if (_discordClient == null) return;
+            
+            // Enforce minimum interval between updates
+            var timeSinceLastUpdate = DateTime.UtcNow - _lastStatusUpdateTime;
+            if (timeSinceLastUpdate < _minStatusUpdateInterval)
+            {
+                _logger.LogDebug("Skipping status update - too soon since last update ({TimeSince})", timeSinceLastUpdate);
+                return;
+            }
 
             try
             {
+                _lastStatusUpdateTime = DateTime.UtcNow;
+                
                 var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>(serviceKey: "gemini");
 
                 var chatHistory = new ChatHistory();
                 chatHistory.AddSystemMessage("""
                     You are a creative status message generator for a Discord bot.
-                    Based on the conversation provided, generate a short, witty Discord status message (max 128 characters).
-                    The status should reflect what the bot is currently thinking about or doing based on the conversation.
+                    Based on the recent conversations provided, generate a short, witty Discord status message (max 128 characters).
+                    The status should reflect what the bot has been thinking about or doing based on the conversation themes.
                     Be playful, sarcastic, or provocative - match the bot's personality.
                     Only respond with the status message, nothing else.
 
@@ -95,7 +136,7 @@ namespace TheSexy6BotWorker.Services
                     - "fact-checking conspiracy theories"
                     """);
 
-                chatHistory.AddUserMessage($"Generate a status based on this conversation:\n{_lastConversationSummary}");
+                chatHistory.AddUserMessage($"Generate a status based on these recent conversations:\n{conversationSummary}");
 
                 var settings = new GeminiPromptExecutionSettings
                 {
@@ -119,7 +160,7 @@ namespace TheSexy6BotWorker.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update status based on conversation");
+                _logger.LogWarning(ex, "Failed to update status based on conversation");
             }
         }
 
