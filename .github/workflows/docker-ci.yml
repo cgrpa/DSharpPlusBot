@@ -29,3 +29,10 @@ jobs:
           docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
+      
+      - name: 'Update Container App'
+        run: |
+          az containerapp update \
+            --name ${{ secrets.CONTAINER_APP_NAME }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP_NAME }} \
+            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}

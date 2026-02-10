@@ -227,6 +227,24 @@ docker buildx build --platform linux/amd64 \
   --push .
 ```
 
+### GitHub Actions Deployment
+
+The project uses GitHub Actions to automatically build, push to ACR, and deploy to Azure Container Apps on every push to `main`. The workflow requires the following GitHub secrets to be configured:
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CREDENTIALS` | Azure service principal credentials for authentication |
+| `REGISTRY_LOGIN_SERVER` | ACR login server (e.g., `thesexy6botregistry.azurecr.io`) |
+| `REGISTRY_USERNAME` | ACR username |
+| `REGISTRY_PASSWORD` | ACR password or access token |
+| `CONTAINER_APP_NAME` | Azure Container App name |
+| `RESOURCE_GROUP_NAME` | Azure resource group containing the Container App |
+
+The workflow automatically:
+1. Builds the Docker image
+2. Pushes to ACR with both commit SHA and `latest` tags
+3. Updates the Container App with a new revision using the SHA-tagged image
+
 ## Project Structure
 
 ```
