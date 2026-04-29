@@ -25,4 +25,8 @@ RUN dotnet publish "./TheSexy6BotWorker.csproj" -c $BUILD_CONFIGURATION -o /app/
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+ARG GIT_SHA=local
+ARG GIT_COMMIT_MSG=unknown
+ENV APP_VERSION=$GIT_SHA
+ENV APP_COMMIT_MSG=$GIT_COMMIT_MSG
 ENTRYPOINT ["dotnet", "TheSexy6BotWorker.dll"]
