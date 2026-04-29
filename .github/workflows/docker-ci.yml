@@ -45,8 +45,17 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
+      - name: 'Get commit info'
+        id: commit
+        run: |
+          echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "msg=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+
       - run: |
-          docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
-          docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
+          docker build . \
+            --build-arg GIT_SHA=${{ steps.commit.outputs.sha }} \
+            --build-arg "GIT_COMMIT_MSG=${{ steps.commit.outputs.msg }}" \
+            -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }} \
+            -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest

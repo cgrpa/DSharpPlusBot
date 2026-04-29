@@ -22,6 +22,8 @@ namespace TheSexy6BotWorker.Handlers
         private readonly IConversationSessionManager _sessionManager;
 
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+        private static readonly string AppVersion =
+            $"{Environment.GetEnvironmentVariable("APP_VERSION") ?? "local"} — \"{Environment.GetEnvironmentVariable("APP_COMMIT_MSG") ?? "unknown"}\"";
 
         public MessageCreatedHandler(
             Kernel kernel,
@@ -177,6 +179,10 @@ namespace TheSexy6BotWorker.Handlers
                 systemMessage.AppendLine();
                 systemMessage.AppendLine($"Session context: {session.MessageCount} messages over {DiscordMessageFormatter.FormatDuration(session.Duration)}.");
             }
+
+            systemMessage.AppendLine();
+            systemMessage.AppendLine();
+            systemMessage.Append($"Deployed version: {AppVersion}");
 
             chatHistory.AddSystemMessage(systemMessage.ToString());
 
