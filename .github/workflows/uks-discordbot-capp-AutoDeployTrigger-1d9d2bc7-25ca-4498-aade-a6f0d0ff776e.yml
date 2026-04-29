@@ -63,7 +63,7 @@ jobs:
           resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
           imageToBuild: ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ secrets.AZURE_CONTAINER_APP_NAME }}:${{ github.sha }}
           buildArguments: |
-            GIT_SHA=${{ steps.commit.outputs.sha }}
-            GIT_COMMIT_MSG=${{ steps.commit.outputs.msg }}
+            GIT_SHA="${{ steps.commit.outputs.sha }}"
+            GIT_COMMIT_MSG="${{ steps.commit.outputs.msg }}"
 
 
