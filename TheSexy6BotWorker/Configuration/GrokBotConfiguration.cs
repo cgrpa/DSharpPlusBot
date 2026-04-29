@@ -63,7 +63,7 @@ public class GrokBotConfiguration : IBotConfiguration
         When responding, be concise and engaging. Don't over-explain your presence.
         """;
     
-    public TimeSpan SessionTimeout => TimeSpan.FromMinutes(3);
+    public TimeSpan SessionTimeout => TimeSpan.FromMinutes(5);
     
     public int HighActivityThreshold => 5;
     

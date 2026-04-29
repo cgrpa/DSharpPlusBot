@@ -6,24 +6,45 @@ on:
     branches: [main]
 
 jobs:
-  build-and-deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v4
-        
+
+      - name: 'Setup .NET'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: 'Restore dependencies'
+        run: dotnet restore TheSexy6BotWorker.sln
+
+      - name: 'Build'
+        run: dotnet build TheSexy6BotWorker.sln --no-restore
+
+      - name: 'Test'
+        run: dotnet test TheSexy6BotWorker.sln --no-build --verbosity normal --filter "Category!=Integration"
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+
       - name: 'Login via Azure CLI'
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
+
       - name: 'Build and push image'
         uses: azure/docker-login@v1
         with:
           login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
-          
+
       - run: |
           docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
           docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest

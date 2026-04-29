@@ -1,28 +1,42 @@
 name: Trigger auto deployment for uks-discordbot-capp
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
-    branches: 
-      [ main ]
-    paths:
-    - '**'
-    - '.github/workflows/uks-discordbot-capp-AutoDeployTrigger-1d9d2bc7-25ca-4498-aade-a6f0d0ff776e.yml'
-
-  # Allow manual trigger 
-  workflow_dispatch:      
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore TheSexy6BotWorker.sln
+
+      - name: Build
+        run: dotnet build TheSexy6BotWorker.sln --no-restore
+
+      - name: Test
+        run: dotnet test TheSexy6BotWorker.sln --no-build --verbosity normal --filter "Category!=Integration"
+
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+    needs: test
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
-      - name: Checkout to the branch
-        uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v2
@@ -35,15 +49,12 @@ jobs:
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
-          registryUrl: prduksdiscordbotacr-b3gugmegdbdefcas.azurecr.io
+          dockerfilePath: ./Dockerfile
+          registryUrl: ${{ secrets.REGISTRY_LOGIN_SERVER }}
           registryUsername: ${{ secrets.UKSDISCORDBOTCAPP_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.UKSDISCORDBOTCAPP_REGISTRY_PASSWORD }}
-          containerAppName: uks-discordbot-capp
-          resourceGroup: uks-discordbot-rg
-          imageToBuild: prduksdiscordbotacr-b3gugmegdbdefcas.azurecr.io/uks-discordbot-capp:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
+          containerAppName: ${{ secrets.AZURE_CONTAINER_APP_NAME }}
+          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          imageToBuild: ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ secrets.AZURE_CONTAINER_APP_NAME }}:${{ github.sha }}
 
 
