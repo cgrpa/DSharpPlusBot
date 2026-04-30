@@ -39,7 +39,6 @@ jobs:
           advanced-security: false
           inputs:
             .github
-          persona: pedantic
           fail-on-no-inputs: true
 
 
