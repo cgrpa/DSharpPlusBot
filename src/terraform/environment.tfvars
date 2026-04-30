@@ -1,6 +1,6 @@
 application = "discordbot"
 location = "uksouth"
-location_sort = "uks"
+location_short = "uks"
 environment = "__ENVIRONMENT__"
 
 #these populate:

@@ -17,13 +17,3 @@ variable "environment" {
   type        = string
   description = "Environment (staging / prd)"
 }
-
-variable "name_prefix" {
-  type        = string
-  description = "Used for prefixing resource names"
-}
-
-variable "name_prefix_no_dash" {
-  type        = string
-  description = "Name prefix but with no dash"
-}

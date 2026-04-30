@@ -367,5 +367,5 @@ FodyWeavers.xsd
 
 #terraform
 
-src/terraform/.terraform
+src/terraform/.terraform*
 .terraform.lock.hcl
