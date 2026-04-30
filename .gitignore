@@ -364,3 +364,8 @@ FodyWeavers.xsd
 
 # TheSexy6BotWorker
 .env
+
+#terraform
+
+src/terraform/.terraform
+.terraform.lock.hcl
