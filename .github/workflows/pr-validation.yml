@@ -133,12 +133,14 @@ jobs:
       
   status-check:
     if: ${{ always() }}
-    needs: [test-dotnet, terraform-plan]
+    needs: [test-dotnet, terraform-plan, zizmor-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if required jobs failed
         run: |
           echo "dotnet=${{ needs.test-dotnet.result }}"
           echo "terraform=${{ needs.terraform-plan.result }}"
+          echo "zizmor=${{ needs.zizmor-scan.result }}"
           test "${{ needs.test-dotnet.result }}" = "success"
           test "${{ needs.terraform-plan.result }}" = "success" -o "${{ needs.terraform-plan.result }}" = "skipped"
+          test "${{ needs.zizmor-scan.result }}" = "success" -o "${{ needs.zizmor-scan.result }}" = "skipped"
