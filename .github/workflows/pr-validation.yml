@@ -76,13 +76,13 @@ jobs:
           dotnet-version: '9.0.x'
           
       - name: 'Restore dependencies'
-        run: dotnet restore TheSexy6BotWorker.sln
+        run: dotnet restore TheSexy6BotWorker.slnx
         
       - name: 'Build'
-        run: dotnet build TheSexy6BotWorker.sln --no-restore
+        run: dotnet build TheSexy6BotWorker.slnx --no-restore
         
       - name: 'Test'
-        run: dotnet test TheSexy6BotWorker.sln --no-build --verbosity normal --filter "Category!=Integration"
+        run: dotnet test TheSexy6BotWorker.slnx --no-build --verbosity normal --filter "Category!=Integration"
       
   status-check:
     if: ${{ always() }}
