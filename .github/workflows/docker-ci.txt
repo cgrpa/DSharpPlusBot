@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v4
@@ -32,6 +34,8 @@ jobs:
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: 'Login via Azure CLI'
         uses: azure/login@v1
@@ -53,9 +57,12 @@ jobs:
 
       - run: |
           docker build . \
-            --build-arg GIT_SHA=${{ steps.commit.outputs.sha }} \
-            --build-arg "GIT_COMMIT_MSG=${{ steps.commit.outputs.msg }}" \
+            --build-arg GIT_SHA=${STEPS_COMMIT_OUTPUTS_SHA} \
+            --build-arg "GIT_COMMIT_MSG=${STEPS_COMMIT_OUTPUTS_MSG}" \
             -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }} \
             -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:${{ github.sha }}
           docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/thesexy6bot:latest
+        env:
+          STEPS_COMMIT_OUTPUTS_SHA: ${{ steps.commit.outputs.sha }}
+          STEPS_COMMIT_OUTPUTS_MSG: ${{ steps.commit.outputs.msg }}

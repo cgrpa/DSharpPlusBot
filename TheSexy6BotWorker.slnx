@@ -1,4 +1,4 @@
 <Solution>
   <Folder Name="/Solution Items/" />
-  <Project Path="TheSexy6BotWorker/TheSexy6BotWorker.csproj" />
+  <Project Path="src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj" />
 </Solution>

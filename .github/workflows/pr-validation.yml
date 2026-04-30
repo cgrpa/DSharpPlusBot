@@ -1,26 +1,146 @@
 name: PR Validation
 
+permissions: {}
+
 on:
   pull_request:
     branches: [main]
 
 jobs:
-  test:
+  changes:
+    permissions:
+      pull-requests: read
+    runs-on: ubuntu-latest
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+      github: ${{ steps.filter.outputs.github }}
+    steps:
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d
+        id: filter
+        with:
+          filters: |
+            terraform:
+              - 'src/terraform/**'
+            github:
+              - '.github/**'
+
+
+  zizmor-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: changes
+    if: needs.changes.outputs.github == 'true'
+    steps:
+      - name: Sparse Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            .github
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
+      
+      - name: Zizmor Scan
+        uses: zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e # v0.5.3
+        with:
+          advanced-security: false
+          inputs:
+            .github
+          fail-on-no-inputs: true
+
+
+  terraform-plan:
+    permissions:
+      id-token: write
+      contents: read
+    environment: stg
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    env: 
+      ARM_USE_OIDC: true
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+        - name: Checkout Terraform files only
+          uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+          with:
+            fetch-depth: 1
+            sparse-checkout: |
+              src/terraform
+            sparse-checkout-cone-mode: true
+            persist-credentials: false
+
+        - name: Token replace Terraform env vars
+          env:
+            ENVIRONMENT: ${{ vars.NAME_PREFIX }}
+          run: |
+            sed "s|__ENVIRONMENT__|${ENVIRONMENT}|g" \
+              src/terraform/environment.tfvars \
+              > src/terraform/environment.auto.tfvars
+
+        - name: Azure Login
+          uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+          with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }} 
+            enable-AzPSSession: true
+        - name: Setup Terraform
+          uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd 
+          with:
+            terraform_version: 1.9.8
+        - name: Terraform Init
+          run: |
+           terraform -chdir=src/terraform init -input=false \
+           -backend-config="resource_group_name=${VARS_TFSTATE_RESOURCE_GROUP}" \
+           -backend-config="storage_account_name=${VARS_TFSTATE_STORAGE_ACCOUNT}" \
+           -backend-config="container_name=${VARS_TFSTATE_CONTAINER}" \
+           -backend-config="key=${VARS_TFSTATE_KEY}" \
+          env:
+            VARS_TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP}}
+            VARS_TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT}}
+            VARS_TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER}}
+            VARS_TFSTATE_KEY: ${{ vars.TFSTATE_KEY}}
+
+        - name: Terraform Plan
+          run: terraform -chdir=src/terraform plan -input=false -no-color
+            
+
+  test-dotnet:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout'
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
         
       - name: 'Setup .NET'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '9.0.x'
           
       - name: 'Restore dependencies'
-        run: dotnet restore TheSexy6BotWorker.sln
+        run: dotnet restore TheSexy6BotWorker.slnx
         
       - name: 'Build'
-        run: dotnet build TheSexy6BotWorker.sln --no-restore
+        run: dotnet build TheSexy6BotWorker.slnx --no-restore
         
       - name: 'Test'
-        run: dotnet test TheSexy6BotWorker.sln --no-build --verbosity normal --filter "Category!=Integration"
+        run: dotnet test TheSexy6BotWorker.slnx --no-build --verbosity normal --filter "Category!=Integration"
+      
+  status-check:
+    if: ${{ always() }}
+    needs: [test-dotnet, terraform-plan, zizmor-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if required jobs failed
+        run: |
+          echo "dotnet=${{ needs.test-dotnet.result }}"
+          echo "terraform=${{ needs.terraform-plan.result }}"
+          echo "zizmor=${{ needs.zizmor-scan.result }}"
+          test "${{ needs.test-dotnet.result }}" = "success"
+          test "${{ needs.terraform-plan.result }}" = "success" -o "${{ needs.terraform-plan.result }}" = "skipped"
+          test "${{ needs.zizmor-scan.result }}" = "success" -o "${{ needs.zizmor-scan.result }}" = "skipped"
