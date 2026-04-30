@@ -1,11 +1,15 @@
 name: PR Validation
 
+permissions: {}
+
 on:
   pull_request:
     branches: [main]
 
 jobs:
   changes:
+    permissions:
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       terraform: ${{ steps.filter.outputs.terraform }}
@@ -19,8 +23,12 @@ jobs:
               - 'src/terraform/**'
             github:
               - '.github/**'
+
+
   zizmor-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: changes
     if: needs.changes.outputs.github == 'true'
     steps:
@@ -86,7 +94,7 @@ jobs:
           run: |
            terraform -chdir=src/terraform init -input=false \
            -backend-config="resource_group_name=${VARS_TFSTATE_RESOURCE_GROUP}" \
-           -backend-config="storage_Account_name=${VARS_TFSTATE_STORAGE_ACCOUNT}" \
+           -backend-config="storage_account_name=${VARS_TFSTATE_STORAGE_ACCOUNT}" \
            -backend-config="container_name=${VARS_TFSTATE_CONTAINER}" \
            -backend-config="key=${VARS_TFSTATE_KEY}" \
           env:
@@ -100,6 +108,8 @@ jobs:
             
 
   test-dotnet:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout'
@@ -108,7 +118,7 @@ jobs:
           persist-credentials: false
         
       - name: 'Setup .NET'
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 #5.2.0
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '9.0.x'
           
