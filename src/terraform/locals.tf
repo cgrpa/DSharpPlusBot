@@ -1,6 +1,6 @@
 locals {
     common_tags = {
-        Environment = upper(var.environment)
+        Environment = var.environment
         Application = var.application
         Location = var.location
     }
