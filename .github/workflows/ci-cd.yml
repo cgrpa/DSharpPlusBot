@@ -15,6 +15,11 @@ jobs:
       terraform: ${{ steps.filter.outputs.terraform }}
       dotnet: ${{ steps.filter.outputs.dotnet }}
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+          
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d
         id: filter
         with:
