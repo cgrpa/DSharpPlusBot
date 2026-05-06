@@ -127,8 +127,16 @@ jobs:
       APPLICATION: discordbot
       environment: stg
     steps:
-      - name: Checkout
+
+      - name: Checkout Terraform files only
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            Dockerfile
+            src/dotnet
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
 
       - name: Get commit info
         id: commit
@@ -146,7 +154,7 @@ jobs:
           enable-AzPSSession: true
 
       - name: Build and push container image to registry
-        uses: azure/container-apps-deploy-action@8dff69dac3367c32ceb2690d8f13adbeab462703 # v0.2.0
+        uses: azure/container-apps-deploy-action@8dff69dac3367c32ceb2690d8f13adbeab462703 # v2
         env:
           ENVIRONMENT: ${{ vars.NAME_PREFIX }}
         with:
