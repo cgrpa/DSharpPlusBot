@@ -10,7 +10,7 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["TheSexy6BotWorker/TheSexy6BotWorker.csproj", "TheSexy6BotWorker/"]
+COPY ["src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj", "TheSexy6BotWorker/"]
 RUN dotnet restore "./TheSexy6BotWorker/TheSexy6BotWorker.csproj"
 COPY . .
 WORKDIR "/src/TheSexy6BotWorker"
