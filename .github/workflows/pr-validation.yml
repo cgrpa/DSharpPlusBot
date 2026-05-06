@@ -90,6 +90,7 @@ jobs:
           uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd 
           with:
             terraform_version: 1.9.8
+
         - name: Terraform Init
           run: |
            terraform -chdir=src/terraform init -input=false \
@@ -106,7 +107,7 @@ jobs:
             VARS_TFSTATE_KEY: ${{ vars.TFSTATE_KEY}}
 
         - name: Terraform Plan
-          run: terraform -chdir=src/terraform plan -input=false -no-color
+          run: terraform -chdir=src/terraform plan -input=false
             
 
   test-dotnet:
