@@ -90,6 +90,7 @@ jobs:
           uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd 
           with:
             terraform_version: 1.9.8
+
         - name: Terraform Init
           run: |
            terraform -chdir=src/terraform init -input=false \
@@ -97,6 +98,8 @@ jobs:
            -backend-config="storage_account_name=${VARS_TFSTATE_STORAGE_ACCOUNT}" \
            -backend-config="container_name=${VARS_TFSTATE_CONTAINER}" \
            -backend-config="key=${VARS_TFSTATE_KEY}" \
+           -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+           -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
           env:
             VARS_TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP}}
             VARS_TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT}}
@@ -104,7 +107,7 @@ jobs:
             VARS_TFSTATE_KEY: ${{ vars.TFSTATE_KEY}}
 
         - name: Terraform Plan
-          run: terraform -chdir=src/terraform plan -input=false -no-color
+          run: terraform -chdir=src/terraform plan -input=false
             
 
   test-dotnet:

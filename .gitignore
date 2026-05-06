@@ -371,3 +371,4 @@ src/terraform/.terraform*
 .terraform.lock.hcl
 
 *terraform.tfstate*
+*local.tfbackend
