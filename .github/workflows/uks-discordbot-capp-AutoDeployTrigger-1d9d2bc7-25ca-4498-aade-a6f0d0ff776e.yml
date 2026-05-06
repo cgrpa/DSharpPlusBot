@@ -45,7 +45,7 @@ jobs:
           COMMIT_MSG_SAFE="$(git log -1 --pretty=%s | tr -cs '[:alnum:]._+-' '-')"
           echo "msg_safe=${COMMIT_MSG_SAFE}" >> $GITHUB_OUTPUT
 
-      - name: Azure Login
+      - name : Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.UKSDISCORDBOTCAPP_AZURE_CLIENT_ID }}
