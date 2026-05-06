@@ -73,7 +73,7 @@ jobs:
 
         - name: Token replace Terraform env vars
           env:
-            ENVIRONMENT: ${{ vars.NAME_PREFIX }}
+            ENVIRONMENT: ${{ vars.ENV_SHORT }}
           run: |
             sed "s|__ENVIRONMENT__|${ENVIRONMENT}|g" \
               src/terraform/environment.tfvars \
