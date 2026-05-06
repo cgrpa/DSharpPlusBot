@@ -76,7 +76,7 @@ jobs:
 
         - name: Token replace Terraform env vars
           env:
-            ENVIRONMENT: ${{ vars.NAME_PREFIX }}
+            ENVIRONMENT: ${{ vars.ENV_SHORT }}
           run: |
             sed "s|__ENVIRONMENT__|${ENVIRONMENT}|g" \
               src/terraform/environment.tfvars \
@@ -129,10 +129,11 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    environment: stg
     env:
       LOCATION_SHORT: uks
       APPLICATION: discordbot
-      environment: stg
+      ENVIRONMENT: ${{ vars.ENV_SHORT }}
     steps:
 
       - name: Checkout Terraform files only
@@ -163,7 +164,7 @@ jobs:
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@8dff69dac3367c32ceb2690d8f13adbeab462703 # v2
         env:
-          ENVIRONMENT: ${{ vars.NAME_PREFIX }}
+          ENVIRONMENT: ${{ vars.ENV_SHORT }}
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: Dockerfile
