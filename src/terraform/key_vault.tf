@@ -13,5 +13,5 @@ resource "azurerm_key_vault" "this" {
 resource "azurerm_role_assignment" "kv_pipeline_access" {
     scope = azurerm_key_vault.this.id
     role_definition_name = "Key Vault Secrets User"
-    principal_id = data.azurerm_client_config.this.client_id
+    principal_id = data.azurerm_client_config.this.object_id
 }
