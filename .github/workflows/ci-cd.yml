@@ -146,7 +146,7 @@ jobs:
           enable-AzPSSession: true
 
       - name: Build and push container image to registry
-        uses: azure/container-apps-deploy-action@v2
+        uses: azure/container-apps-deploy-action@8dff69dac3367c32ceb2690d8f13adbeab462703 # v0.2.0
         env:
           ENVIRONMENT: ${{ vars.NAME_PREFIX }}
         with:
