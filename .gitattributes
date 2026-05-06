@@ -61,3 +61,16 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.tf text eol=lf
+*.cs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.xml text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
