@@ -1,0 +1,113 @@
+name: Reusable Terraform
+
+on:
+  workflow_call:
+    inputs:
+      apply:
+        description: Whether to apply the Terraform plan.
+        required: false
+        type: boolean
+        default: false
+      read-outputs:
+        description: Whether to expose selected Terraform outputs.
+        required: false
+        type: boolean
+        default: false
+      github-environment:
+        description: GitHub environment that provides Terraform vars and Azure secrets.
+        required: false
+        type: string
+        default: stg
+      terraform-version:
+        description: Terraform version to install.
+        required: false
+        type: string
+        default: 1.9.8
+
+    outputs:
+      resource_group_name:
+        description: Terraform resource_group_name output.
+        value: ${{ jobs.terraform.outputs.resource_group_name }}
+      container_app_name:
+        description: Terraform container_app_name output.
+        value: ${{ jobs.terraform.outputs.container_app_name }}
+      registry_url:
+        description: Terraform container_registry_login_server output.
+        value: ${{ jobs.terraform.outputs.registry_url }}
+
+jobs:
+  terraform:
+    permissions:
+      id-token: write
+      contents: read
+    environment: ${{ inputs.github-environment }}
+    runs-on: ubuntu-latest
+    env:
+      ARM_USE_OIDC: true
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    outputs:
+      resource_group_name: ${{ steps.tf.outputs.resource_group_name }}
+      container_app_name: ${{ steps.tf.outputs.container_app_name }}
+      registry_url: ${{ steps.tf.outputs.registry_url }}
+    steps:
+      - name: Checkout Terraform files only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            src/terraform
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
+
+      - name: Token replace Terraform env vars
+        env:
+          ENVIRONMENT: ${{ vars.ENV_SHORT }}
+        run: |
+          sed "s|__ENVIRONMENT__|${ENVIRONMENT}|g" \
+            src/terraform/environment.tfvars \
+            > src/terraform/environment.auto.tfvars
+
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+
+      - name: Terraform Init
+        run: |
+          terraform -chdir=src/terraform init -input=false \
+            -backend-config="resource_group_name=${VARS_TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${VARS_TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${VARS_TFSTATE_CONTAINER}" \
+            -backend-config="key=${VARS_TFSTATE_KEY}" \
+            -backend-config="client_id=${AZURE_CLIENT_ID}" \
+            -backend-config="tenant_id=${AZURE_TENANT_ID}"
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          VARS_TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          VARS_TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          VARS_TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+          VARS_TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+
+      - name: Terraform Plan
+        run: terraform -chdir=src/terraform plan -input=false
+
+      - name: Terraform Apply
+        if: inputs.apply
+        run: terraform -chdir=src/terraform apply -input=false -auto-approve
+
+      - name: Read Terraform outputs
+        id: tf
+        if: inputs.read-outputs
+        run: |
+          echo "resource_group_name=$(terraform -chdir=src/terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "container_app_name=$(terraform -chdir=src/terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "registry_url=$(terraform -chdir=src/terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
