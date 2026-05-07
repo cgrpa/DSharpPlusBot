@@ -33,7 +33,6 @@ namespace TheSexy6BotWorker
                 Console.WriteLine($"APP_COMMIT_MSG={Environment.GetEnvironmentVariable("APP_COMMIT_MSG") ?? "unset"}");
                 return 0;
             }
-
             host.Run();
             return 0;
         }
