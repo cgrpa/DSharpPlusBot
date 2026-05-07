@@ -57,7 +57,6 @@ jobs:
       apply: true
       github-environment: stg
       read-outputs: true
-    secrets: inherit
 
   build-and-deploy-dotnet:
     runs-on: ubuntu-latest

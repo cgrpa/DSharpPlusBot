@@ -65,7 +65,6 @@ jobs:
     uses: ./.github/workflows/_terraform.yml
     with:
       github-environment: stg
-    secrets: inherit
             
 
   test-dotnet:

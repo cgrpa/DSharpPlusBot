@@ -36,10 +36,17 @@ jobs:
           dotnet-version: ${{ inputs.dotnet-version }}
 
       - name: Restore dependencies
-        run: dotnet restore "${{ inputs.solution }}"
+        run: dotnet restore "$SOLUTION"
+        env:
+          SOLUTION: ${{ inputs.solution }}
 
       - name: Build
-        run: dotnet build "${{ inputs.solution }}" --no-restore
+        run: dotnet build "$SOLUTION" --no-restore
+        env:
+          SOLUTION: ${{ inputs.solution }}
 
       - name: Test
-        run: dotnet test "${{ inputs.solution }}" --no-build --verbosity normal --filter "${{ inputs.test-filter }}"
+        run: dotnet test "$SOLUTION" --no-build --verbosity normal --filter "$TEST_FILTER"
+        env:
+          SOLUTION: ${{ inputs.solution }}
+          TEST_FILTER: ${{ inputs.test-filter }}
