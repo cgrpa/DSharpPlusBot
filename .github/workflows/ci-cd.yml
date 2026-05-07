@@ -115,7 +115,7 @@ jobs:
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: Dockerfile
-          registryUrl: ${{ format('{0}{1}{2}acr.azurecr.io', env.ENVIRONMENT, env.LOCATION_SHORT, env.APPLICATION) }}
+          acrName: ${{ format('{0}{1}{2}acr', env.ENVIRONMENT, env.LOCATION_SHORT, env.APPLICATION) }}
           containerAppName: ${{ format('{0}-{1}-{2}-app', env.ENVIRONMENT, env.LOCATION_SHORT, env.APPLICATION) }}
           resourceGroup: ${{ format('{0}-{1}-{2}-rg', env.ENVIRONMENT, env.LOCATION_SHORT, env.APPLICATION) }}
           imageToBuild: ${{ format('{0}{1}{2}acr.azurecr.io/{2}:{3}', env.ENVIRONMENT, env.LOCATION_SHORT, env.APPLICATION, github.sha) }}
