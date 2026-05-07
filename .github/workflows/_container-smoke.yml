@@ -1,0 +1,71 @@
+name: Reusable Container Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: Local Docker image tag used for the smoke test.
+        required: false
+        type: string
+        default: thesexy6bot:ci
+      dockerfile-path:
+        description: Dockerfile path relative to the repository root.
+        required: false
+        type: string
+        default: Dockerfile
+      build-context:
+        description: Docker build context.
+        required: false
+        type: string
+        default: .
+      git-sha:
+        description: Commit SHA passed into the image build.
+        required: true
+        type: string
+      commit-message:
+        description: Commit message passed into the image build.
+        required: false
+        type: string
+        default: ci-smoke
+      smoke-test-argument:
+        description: App argument that runs the smoke-test path.
+        required: false
+        type: string
+        default: --smoke-test
+
+jobs:
+  smoke:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app files only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            Dockerfile
+            src/dotnet
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
+
+      - name: Build container image
+        run: |
+          short_sha="${GIT_SHA:0:7}"
+          docker build "$BUILD_CONTEXT" \
+            --file "$DOCKERFILE_PATH" \
+            --build-arg GIT_SHA="$short_sha" \
+            --build-arg GIT_COMMIT_MSG="$COMMIT_MESSAGE" \
+            -t "$IMAGE_NAME"
+        env:
+          BUILD_CONTEXT: ${{ inputs.build-context }}
+          COMMIT_MESSAGE: ${{ inputs.commit-message }}
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
+          GIT_SHA: ${{ inputs.git-sha }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+
+      - name: Run container smoke test
+        run: docker run --rm "$IMAGE_NAME" "$SMOKE_TEST_ARGUMENT"
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          SMOKE_TEST_ARGUMENT: ${{ inputs.smoke-test-argument }}

@@ -14,6 +14,7 @@ jobs:
     outputs:
       terraform: ${{ steps.filter.outputs.terraform }}
       github: ${{ steps.filter.outputs.github }}
+      dotnet: ${{ steps.filter.outputs.dotnet }}
     steps:
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d
         id: filter
@@ -23,6 +24,11 @@ jobs:
               - 'src/terraform/**'
             github:
               - '.github/**'
+            dotnet:
+              - 'Dockerfile'
+              - '.github/workflows/_container-smoke.yml'
+              - '.github/workflows/_dotnet-test.yml'
+              - 'src/dotnet/**'
 
 
   zizmor-scan:
@@ -54,96 +60,42 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    environment: stg
-    runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.terraform == 'true'
-    env: 
-      ARM_USE_OIDC: true
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-    steps:
-        - name: Checkout Terraform files only
-          uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-          with:
-            fetch-depth: 1
-            sparse-checkout: |
-              src/terraform
-            sparse-checkout-cone-mode: true
-            persist-credentials: false
-
-        - name: Token replace Terraform env vars
-          env:
-            ENVIRONMENT: ${{ vars.ENV_SHORT }}
-          run: |
-            sed "s|__ENVIRONMENT__|${ENVIRONMENT}|g" \
-              src/terraform/environment.tfvars \
-              > src/terraform/environment.auto.tfvars
-
-        - name: Azure Login
-          uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
-          with:
-            client-id: ${{ secrets.AZURE_CLIENT_ID }}
-            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }} 
-            enable-AzPSSession: true
-        - name: Setup Terraform
-          uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd 
-          with:
-            terraform_version: 1.9.8
-
-        - name: Terraform Init
-          run: |
-           terraform -chdir=src/terraform init -input=false \
-           -backend-config="resource_group_name=${VARS_TFSTATE_RESOURCE_GROUP}" \
-           -backend-config="storage_account_name=${VARS_TFSTATE_STORAGE_ACCOUNT}" \
-           -backend-config="container_name=${VARS_TFSTATE_CONTAINER}" \
-           -backend-config="key=${VARS_TFSTATE_KEY}" \
-           -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
-           -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-          env:
-            VARS_TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP}}
-            VARS_TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT}}
-            VARS_TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER}}
-            VARS_TFSTATE_KEY: ${{ vars.TFSTATE_KEY}}
-
-        - name: Terraform Plan
-          run: terraform -chdir=src/terraform plan -input=false
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      github-environment: stg
+    secrets: inherit
             
 
   test-dotnet:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: 'Checkout'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-        
-      - name: 'Setup .NET'
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
-        with:
-          dotnet-version: '9.0.x'
-          
-      - name: 'Restore dependencies'
-        run: dotnet restore TheSexy6BotWorker.slnx
-        
-      - name: 'Build'
-        run: dotnet build TheSexy6BotWorker.slnx --no-restore
-        
-      - name: 'Test'
-        run: dotnet test TheSexy6BotWorker.slnx --no-build --verbosity normal --filter "Category!=Integration"
+    uses: ./.github/workflows/_dotnet-test.yml
+
+  container-smoke:
+    permissions:
+      contents: read
+    needs:
+      - changes
+      - test-dotnet
+    if: needs.changes.outputs.dotnet == 'true'
+    uses: ./.github/workflows/_container-smoke.yml
+    with:
+      git-sha: ${{ github.sha }}
       
   status-check:
     if: ${{ always() }}
-    needs: [test-dotnet, terraform-plan, zizmor-scan]
+    needs: [test-dotnet, terraform-plan, zizmor-scan, container-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if required jobs failed
         run: |
           echo "dotnet=${{ needs.test-dotnet.result }}"
+          echo "container-smoke=${{ needs.container-smoke.result }}"
           echo "terraform=${{ needs.terraform-plan.result }}"
           echo "zizmor=${{ needs.zizmor-scan.result }}"
           test "${{ needs.test-dotnet.result }}" = "success"
+          test "${{ needs.container-smoke.result }}" = "success" -o "${{ needs.container-smoke.result }}" = "skipped"
           test "${{ needs.terraform-plan.result }}" = "success" -o "${{ needs.terraform-plan.result }}" = "skipped"
           test "${{ needs.zizmor-scan.result }}" = "success" -o "${{ needs.zizmor-scan.result }}" = "skipped"

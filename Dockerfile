@@ -9,11 +9,11 @@ WORKDIR /app
 # This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj", "TheSexy6BotWorker/"]
-RUN dotnet restore "./TheSexy6BotWorker/TheSexy6BotWorker.csproj"
+WORKDIR /repo
+COPY ["src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj", "src/dotnet/TheSexy6BotWorker/"]
+RUN dotnet restore "./src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj"
 COPY . .
-WORKDIR "/src/TheSexy6BotWorker"
+WORKDIR "/repo/src/dotnet/TheSexy6BotWorker"
 RUN dotnet build "./TheSexy6BotWorker.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # This stage is used to publish the service project to be copied to the final stage
