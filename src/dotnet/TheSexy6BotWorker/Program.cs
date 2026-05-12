@@ -15,7 +15,10 @@ namespace TheSexy6BotWorker
                 .ToArray();
 
             var builder = Host.CreateApplicationBuilder(hostArgs);
-            builder.Configuration.AddUserSecrets<Program>();
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Configuration.AddUserSecrets<Program>();
+            }
 
             if (!isSmokeTest)
             {

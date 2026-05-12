@@ -1,7 +1,7 @@
-application = "discordbot"
-location = "uksouth"
+application    = "discordbot"
+location       = "uksouth"
 location_short = "uks"
-environment = "__ENVIRONMENT__"
+environment    = "__ENVIRONMENT__"
 
 #these populate:
 # name_prefix in format "${var.environment}-${var.application}"

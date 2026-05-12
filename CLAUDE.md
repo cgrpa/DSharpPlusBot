@@ -70,3 +70,17 @@ CI/CD via GitHub Actions:
 - **`pr-validation.yml`**: on PRs, runs `dotnet build` + `dotnet test --filter "Category!=Integration"`
 
 The Dockerfile is a standard multi-stage build (SDK → publish → mcr.microsoft.com/dotnet/runtime).
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for this repository (`cgrpa/TheSexy6BotWorker`) via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain docs are configured as multi-context (`CONTEXT-MAP.md` + per-context `CONTEXT.md` and ADRs). See `docs/agents/domain.md`.
