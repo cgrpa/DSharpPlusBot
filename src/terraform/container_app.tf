@@ -19,6 +19,16 @@ resource "azurerm_container_app" "this" {
     identity = "System"
   }
 
+  dynamic "secret" {
+    for_each = local.container_app_secret_aliases
+
+    content {
+      name                = secret.value
+      identity            = "System"
+      key_vault_secret_id = format("%ssecrets/%s", azurerm_key_vault.this.vault_uri, secret.key)
+    }
+  }
+
   // bootstrap - pipeline owns image
   template {
     container {
@@ -26,6 +36,15 @@ resource "azurerm_container_app" "this" {
       image  = "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 0.25
       memory = "0.5Gi"
+
+      dynamic "env" {
+        for_each = local.container_app_secret_aliases
+
+        content {
+          name        = env.key
+          secret_name = env.value
+        }
+      }
     }
   }
 
@@ -33,6 +52,21 @@ resource "azurerm_container_app" "this" {
     ignore_changes = [
       template[0].container[0].image,
     ]
+
+    precondition {
+      condition     = length(setsubtract(local.required_secret_keys, local.alias_map_keys)) == 0 && length(setsubtract(local.alias_map_keys, local.required_secret_keys)) == 0
+      error_message = "required_secret_names must match alias-map keys exactly. Expected keys: ${join(", ", sort(keys(local.required_secret_alias_map)))}."
+    }
+
+    precondition {
+      condition     = !var.enforce_required_secret_presence || length(local.missing_required_secret_names) == 0
+      error_message = "Required Key Vault secrets are missing: ${join(", ", local.missing_required_secret_names)}."
+    }
+
+    precondition {
+      condition     = !var.enforce_required_secret_presence || length(local.disabled_required_secret_names) == 0
+      error_message = "Required Key Vault secrets are disabled: ${join(", ", local.disabled_required_secret_names)}."
+    }
   }
 
   identity {

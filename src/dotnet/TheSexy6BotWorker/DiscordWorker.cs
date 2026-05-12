@@ -23,11 +23,17 @@ namespace TheSexy6BotWorker
     {
         private readonly ILogger<DiscordWorker> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IHostEnvironment _hostEnvironment;
         private DiscordClient _client;
-        public DiscordWorker(ILogger<DiscordWorker> logger, IConfiguration configuration)
+
+        public DiscordWorker(
+            ILogger<DiscordWorker> logger,
+            IConfiguration configuration,
+            IHostEnvironment hostEnvironment)
         {
             _logger = logger;
             _configuration = configuration;
+            _hostEnvironment = hostEnvironment;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,7 +48,7 @@ namespace TheSexy6BotWorker
             builder.ConfigureServices(services =>
             {
                 // Determine environment prefix for bot commands
-                var environmentPrefix = Environment.GetEnvironmentVariable("Environment") == "Development" ? "test-" : "";
+                var environmentPrefix = _hostEnvironment.IsDevelopment() ? "test-" : "";
 
                 // Register bot registry and configurations
                 services.AddSingleton(sp =>
