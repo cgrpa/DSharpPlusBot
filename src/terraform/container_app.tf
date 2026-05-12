@@ -3,7 +3,7 @@ resource "azurerm_container_app_environment" "this" {
   location                   = azurerm_resource_group.this.location
   resource_group_name        = azurerm_resource_group.this.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
-  tags = local.common_tags
+  tags                       = local.common_tags
 }
 
 resource "azurerm_container_app" "this" {
@@ -11,12 +11,18 @@ resource "azurerm_container_app" "this" {
   container_app_environment_id = azurerm_container_app_environment.this.id
   resource_group_name          = azurerm_resource_group.this.name
   revision_mode                = "Single"
-  tags = local.common_tags
+  tags                         = local.common_tags
+
+  // use managed identity for private ACR image pulls
+  registry {
+    server   = azurerm_container_registry.this.login_server
+    identity = "System"
+  }
 
   // bootstrap - pipeline owns image
   template {
     container {
-      name   = "${local.name_prefix}"
+      name   = local.name_prefix
       image  = "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 0.25
       memory = "0.5Gi"
