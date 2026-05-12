@@ -23,6 +23,13 @@ on:
         required: false
         type: string
         default: 1.9.8
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
 
     outputs:
       resource_group_name:
