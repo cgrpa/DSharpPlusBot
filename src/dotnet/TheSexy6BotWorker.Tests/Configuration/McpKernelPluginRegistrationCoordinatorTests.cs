@@ -8,6 +8,93 @@ namespace TheSexy6BotWorker.Tests.Configuration;
 public class McpKernelPluginRegistrationCoordinatorTests
 {
     [Fact]
+    public async Task RegisterAsync_BootstrapsServersInParallel()
+    {
+        var options = CreateEnabledOptions(
+            ("Tavily", new McpServerOptions { AllowedTools = ["search"] }),
+            ("Weather", new McpServerOptions { AllowedTools = ["forecast"] }));
+
+        var maxConcurrency = 0;
+        var currentConcurrency = 0;
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            async (_, cancellationToken) =>
+            {
+                var concurrency = Interlocked.Increment(ref currentConcurrency);
+                UpdateMaxConcurrency(ref maxConcurrency, concurrency);
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+
+                Interlocked.Decrement(ref currentConcurrency);
+                return McpServerToolDiscoveryResult.Success(
+                [
+                    new McpToolDescriptor("search"),
+                    new McpToolDescriptor("forecast")
+                ]);
+            });
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator([discovery], registrar);
+
+        var result = await coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options);
+
+        Assert.Equal(2, result.RegisteredServers.Count);
+        Assert.True(maxConcurrency >= 2, $"Expected parallel bootstrap but observed max concurrency {maxConcurrency}.");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_AggregatesParallelResultsAcrossServers()
+    {
+        var options = CreateEnabledOptions(
+            ("Tavily", new McpServerOptions { AllowedTools = ["search"] }),
+            ("Weather", new McpServerOptions { AllowedTools = ["forecast"] }));
+
+        var tavilyStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var weatherStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            async (request, cancellationToken) =>
+            {
+                if (string.Equals(request.ServerName, "Tavily", StringComparison.OrdinalIgnoreCase))
+                {
+                    tavilyStarted.TrySetResult();
+                }
+                else if (string.Equals(request.ServerName, "Weather", StringComparison.OrdinalIgnoreCase))
+                {
+                    weatherStarted.TrySetResult();
+                }
+
+                await release.Task.WaitAsync(cancellationToken);
+
+                if (string.Equals(request.ServerName, "Tavily", StringComparison.OrdinalIgnoreCase))
+                {
+                    return McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")]);
+                }
+
+                return McpServerToolDiscoveryResult.Failure("Weather unreachable");
+            });
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator([discovery], registrar);
+
+        var registrationTask = coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options);
+
+        await Task.WhenAll(tavilyStarted.Task, weatherStarted.Task).WaitAsync(TimeSpan.FromSeconds(2));
+        release.TrySetResult();
+
+        var result = await registrationTask;
+
+        var registered = Assert.Single(result.RegisteredServers);
+        Assert.Equal("Tavily", registered.ServerName);
+        Assert.Equal(["search"], registered.RegisteredTools);
+
+        var skipped = Assert.Single(result.SkippedServers);
+        Assert.Equal("Weather", skipped.ServerName);
+        Assert.Equal(McpServerSkipReason.ToolDiscoveryFailed, skipped.Reason);
+    }
+
+    [Fact]
     public async Task RegisterAsync_TriesStreamableHttpFirstThenFallsBackToSse()
     {
         var options = CreateEnabledOptions(("Tavily", new McpServerOptions
@@ -19,17 +106,17 @@ public class McpKernelPluginRegistrationCoordinatorTests
         var callOrder = new List<McpTransportKind>();
         var streamable = new FakeDiscoveryClient(
             McpTransportKind.StreamableHttp,
-            _ =>
+            (_, _) =>
             {
                 callOrder.Add(McpTransportKind.StreamableHttp);
-                return McpServerToolDiscoveryResult.Failure("streamable failed");
+                return Task.FromResult(McpServerToolDiscoveryResult.Failure("streamable failed"));
             });
         var sse = new FakeDiscoveryClient(
             McpTransportKind.ServerSentEvents,
-            _ =>
+            (_, _) =>
             {
                 callOrder.Add(McpTransportKind.ServerSentEvents);
-                return McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")]);
+                return Task.FromResult(McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")]));
             });
 
         var registrar = new RecordingPluginRegistrar();
@@ -62,12 +149,12 @@ public class McpKernelPluginRegistrationCoordinatorTests
 
         var discovery = new FakeDiscoveryClient(
             McpTransportKind.StreamableHttp,
-            _ => McpServerToolDiscoveryResult.Success(
-            [
-                new McpToolDescriptor("search"),
-                new McpToolDescriptor("extract"),
-                new McpToolDescriptor("crawl")
-            ]));
+            (_, _) => Task.FromResult(McpServerToolDiscoveryResult.Success(
+                [
+                    new McpToolDescriptor("search"),
+                    new McpToolDescriptor("extract"),
+                    new McpToolDescriptor("crawl")
+                ])));
 
         var registrar = new RecordingPluginRegistrar();
         var coordinator = CreateCoordinator([discovery], registrar);
@@ -92,7 +179,7 @@ public class McpKernelPluginRegistrationCoordinatorTests
 
         var discovery = new FakeDiscoveryClient(
             McpTransportKind.StreamableHttp,
-            _ => McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")]));
+            (_, _) => Task.FromResult(McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")])));
 
         var registrar = new RecordingPluginRegistrar();
         var coordinator = CreateCoordinator([discovery], registrar);
@@ -109,6 +196,117 @@ public class McpKernelPluginRegistrationCoordinatorTests
     }
 
     [Fact]
+    public async Task RegisterAsync_WhenStrictStartupIsDisabled_ContinuesInDegradedMode()
+    {
+        var options = CreateEnabledOptions(("Tavily", new McpServerOptions
+        {
+            AllowedTools = ["search"]
+        }));
+        options.StrictStartup = false;
+
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            (_, _) => Task.FromResult(McpServerToolDiscoveryResult.Failure("Server unavailable")));
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator([discovery], registrar);
+
+        var result = await coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options);
+
+        Assert.Empty(result.RegisteredServers);
+        var skipped = Assert.Single(result.SkippedServers);
+        Assert.Equal("Tavily", skipped.ServerName);
+        Assert.Equal(McpServerSkipReason.ToolDiscoveryFailed, skipped.Reason);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenStrictStartupIsEnabled_FailsFast()
+    {
+        var options = CreateEnabledOptions(("Tavily", new McpServerOptions
+        {
+            AllowedTools = ["search"]
+        }));
+        options.StrictStartup = true;
+
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            (_, _) => Task.FromResult(McpServerToolDiscoveryResult.Failure("Server unavailable")));
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator([discovery], registrar);
+
+        var exception = await Assert.ThrowsAsync<McpStrictStartupException>(() =>
+            coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options));
+
+        Assert.Empty(exception.RegistrationResult.RegisteredServers);
+        var skipped = Assert.Single(exception.RegistrationResult.SkippedServers);
+        Assert.Equal("Tavily", skipped.ServerName);
+        Assert.Equal(McpServerSkipReason.ToolDiscoveryFailed, skipped.Reason);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_UsesDefaultStartupTimeoutWhenServerDoesNotOverride()
+    {
+        var options = CreateEnabledOptions(("Tavily", new McpServerOptions
+        {
+            AllowedTools = ["search"]
+        }));
+
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            async (_, cancellationToken) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                return McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")]);
+            });
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator(
+            [discovery],
+            registrar,
+            defaultServerStartupTimeout: TimeSpan.FromMilliseconds(120));
+
+        var result = await coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options);
+
+        Assert.Empty(result.RegisteredServers);
+        var skipped = Assert.Single(result.SkippedServers);
+        Assert.Equal(McpServerSkipReason.StartupTimeout, skipped.Reason);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_UsesServerTimeoutOverrideWhenProvided()
+    {
+        var options = CreateEnabledOptions(("Tavily", new McpServerOptions
+        {
+            AllowedTools = ["search"],
+            Startup = new McpServerStartupOptions
+            {
+                ConnectTimeoutSeconds = 1
+            }
+        }));
+
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            async (_, cancellationToken) =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(1500), cancellationToken);
+                return McpServerToolDiscoveryResult.Success([new McpToolDescriptor("search")]);
+            });
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator(
+            [discovery],
+            registrar,
+            defaultServerStartupTimeout: TimeSpan.FromSeconds(3));
+
+        var result = await coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options);
+
+        Assert.Empty(result.RegisteredServers);
+        var skipped = Assert.Single(result.SkippedServers);
+        Assert.Equal(McpServerSkipReason.StartupTimeout, skipped.Reason);
+    }
+
+    [Fact]
     public void StableMcpServerPluginAliasProvider_UsesStableTavilyAlias_AndDeterministicFallback()
     {
         var aliasProvider = new StableMcpServerPluginAliasProvider();
@@ -120,7 +318,8 @@ public class McpKernelPluginRegistrationCoordinatorTests
 
     private static McpKernelPluginRegistrationCoordinator CreateCoordinator(
         IEnumerable<IMcpServerToolDiscoveryClient> discoveryClients,
-        RecordingPluginRegistrar registrar)
+        RecordingPluginRegistrar registrar,
+        TimeSpan? defaultServerStartupTimeout = null)
     {
         var resolver = new McpServerConfigurationResolver(
             BuildConfiguration(new Dictionary<string, string?>()),
@@ -130,7 +329,8 @@ public class McpKernelPluginRegistrationCoordinatorTests
             resolver,
             discoveryClients,
             new StableMcpServerPluginAliasProvider(),
-            registrar);
+            registrar,
+            defaultServerStartupTimeout);
     }
 
     private static McpOptions CreateEnabledOptions(params (string Name, McpServerOptions Server)[] servers)
@@ -155,7 +355,7 @@ public class McpKernelPluginRegistrationCoordinatorTests
 
     private sealed class FakeDiscoveryClient(
         McpTransportKind transportKind,
-        Func<McpServerToolDiscoveryRequest, McpServerToolDiscoveryResult> discover)
+        Func<McpServerToolDiscoveryRequest, CancellationToken, Task<McpServerToolDiscoveryResult>> discoverAsync)
         : IMcpServerToolDiscoveryClient
     {
         public McpTransportKind TransportKind { get; } = transportKind;
@@ -164,7 +364,7 @@ public class McpKernelPluginRegistrationCoordinatorTests
             McpServerToolDiscoveryRequest request,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(discover(request));
+            return discoverAsync(request, cancellationToken);
         }
     }
 
@@ -196,5 +396,22 @@ public class McpKernelPluginRegistrationCoordinatorTests
     private sealed class FakeKernelBuilderPlugins : IKernelBuilderPlugins
     {
         public IServiceCollection Services { get; } = new ServiceCollection();
+    }
+
+    private static void UpdateMaxConcurrency(ref int maxConcurrency, int observedConcurrency)
+    {
+        while (true)
+        {
+            var snapshot = Volatile.Read(ref maxConcurrency);
+            if (observedConcurrency <= snapshot)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref maxConcurrency, observedConcurrency, snapshot) == snapshot)
+            {
+                return;
+            }
+        }
     }
 }

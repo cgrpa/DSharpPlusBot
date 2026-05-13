@@ -1,4 +1,5 @@
 using TheSexy6BotWorker.Configuration;
+using TheSexy6BotWorker.Services;
 
 namespace TheSexy6BotWorker
 {
@@ -25,12 +26,19 @@ namespace TheSexy6BotWorker
 
             builder.Services.AddSingleton<IEnvironmentVariableProvider, ProcessEnvironmentVariableProvider>();
             builder.Services.AddSingleton<McpServerConfigurationResolver>();
-            builder.Services.AddSingleton<IMcpToolInvoker, UnavailableMcpToolInvoker>();
             builder.Services.AddSingleton<IMcpKernelPluginRegistrar, SemanticKernelMcpPluginRegistrar>();
             builder.Services.AddSingleton<IMcpServerPluginAliasProvider, StableMcpServerPluginAliasProvider>();
             builder.Services.AddSingleton<IMcpServerToolDiscoveryClient, NoOpStreamableHttpMcpToolDiscoveryClient>();
             builder.Services.AddSingleton<IMcpServerToolDiscoveryClient, NoOpSseMcpToolDiscoveryClient>();
+            builder.Services.AddSingleton<IMcpJitterProvider, RandomMcpJitterProvider>();
+            builder.Services.AddSingleton<IMcpReconnectDelayPolicy, ExponentialMcpReconnectDelayPolicy>();
+            builder.Services.AddSingleton<IMcpDelayScheduler, SystemMcpDelayScheduler>();
+            builder.Services.AddSingleton<IMcpRuntimeTelemetrySink, LoggerMcpRuntimeTelemetrySink>();
+            builder.Services.AddSingleton<IMcpRuntimeClient, NoOpMcpRuntimeClient>();
+            builder.Services.AddSingleton<IMcpRuntimeSupervisor, McpRuntimeSupervisor>();
+            builder.Services.AddSingleton<IMcpToolInvoker, SupervisedMcpToolInvoker>();
             builder.Services.AddSingleton<McpKernelPluginRegistrationCoordinator>();
+            builder.Services.AddSingleton<IMcpFeature, McpFeature>();
 
             if (!isSmokeTest)
             {

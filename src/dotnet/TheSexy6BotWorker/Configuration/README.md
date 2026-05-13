@@ -151,7 +151,7 @@ MCP rollout is controlled under the `Mcp` section. The default contract is inten
 - `Mcp:Enabled` defaults to `false`
 - `Mcp:StrictStartup` defaults to `false`
 
-`Mcp:Servers` is a named map of server configs. Each server supports endpoint, headers, tool allowlist, and startup placeholders:
+`Mcp:Servers` is a named map of server configs. Each server supports endpoint, headers, tool allowlist, and startup timeout controls:
 
 ```json
 {
@@ -188,6 +188,9 @@ Interpolation and validation contract:
 
 Registration and discovery contract:
 
+- Server bootstrap runs in parallel across configured MCP servers.
+- Per-server startup timeout defaults to `10` seconds.
+- Per-server timeout overrides can be set via `Startup.ConnectTimeoutSeconds`, `Startup.InitializeTimeoutSeconds`, and `Startup.ReadyTimeoutSeconds`; the most restrictive non-null value is used as the startup timeout budget.
 - Transport auto-detection order is `StreamableHttp` first, then `ServerSentEvents` fallback.
 - Only `AllowedTools` are registered into the kernel plugin.
 - If any configured allowed tool is missing from discovery, that entire server is skipped (no partial registration).

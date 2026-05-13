@@ -19,7 +19,8 @@ public enum McpServerSkipReason
     MissingInterpolatedValue = 1,
     InvalidDefaultParametersJson = 2,
     MissingAllowedTools = 3,
-    ToolDiscoveryFailed = 4
+    ToolDiscoveryFailed = 4,
+    StartupTimeout = 5
 }
 
 public sealed class McpServerSkipDecision

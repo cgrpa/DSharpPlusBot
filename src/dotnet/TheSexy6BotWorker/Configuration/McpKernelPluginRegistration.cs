@@ -197,18 +197,42 @@ public sealed class McpKernelPluginRegistrationResult
     public IReadOnlyList<McpServerSkipDecision> SkippedServers { get; }
 }
 
+public sealed class McpStrictStartupException : Exception
+{
+    public McpStrictStartupException(McpKernelPluginRegistrationResult registrationResult)
+        : base(CreateMessage(registrationResult))
+    {
+        RegistrationResult = registrationResult ?? throw new ArgumentNullException(nameof(registrationResult));
+    }
+
+    public McpKernelPluginRegistrationResult RegistrationResult { get; }
+
+    private static string CreateMessage(McpKernelPluginRegistrationResult registrationResult)
+    {
+        var skippedServers = registrationResult.SkippedServers
+            .Select(static s => s.ServerName)
+            .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return $"MCP strict startup failed because {registrationResult.SkippedServers.Count} server(s) were skipped: {string.Join(", ", skippedServers)}.";
+    }
+}
+
 public sealed class McpKernelPluginRegistrationCoordinator
 {
+    internal const int DefaultServerStartupTimeoutSeconds = 10;
+
     private readonly McpServerConfigurationResolver _resolver;
     private readonly IMcpServerPluginAliasProvider _aliasProvider;
     private readonly IMcpKernelPluginRegistrar _pluginRegistrar;
     private readonly IReadOnlyList<IMcpServerToolDiscoveryClient> _discoveryClients;
+    private readonly TimeSpan _defaultServerStartupTimeout;
 
     public McpKernelPluginRegistrationCoordinator(
         McpServerConfigurationResolver resolver,
         IEnumerable<IMcpServerToolDiscoveryClient> discoveryClients,
         IMcpServerPluginAliasProvider? aliasProvider = null,
-        IMcpKernelPluginRegistrar? pluginRegistrar = null)
+        IMcpKernelPluginRegistrar? pluginRegistrar = null,
+        TimeSpan? defaultServerStartupTimeout = null)
     {
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _aliasProvider = aliasProvider ?? new StableMcpServerPluginAliasProvider();
@@ -216,6 +240,7 @@ public sealed class McpKernelPluginRegistrationCoordinator
         _discoveryClients = discoveryClients?
             .OrderBy(static c => c.TransportKind)
             .ToArray() ?? throw new ArgumentNullException(nameof(discoveryClients));
+        _defaultServerStartupTimeout = defaultServerStartupTimeout ?? TimeSpan.FromSeconds(DefaultServerStartupTimeoutSeconds);
     }
 
     public async Task<McpKernelPluginRegistrationResult> RegisterAsync(
@@ -234,66 +259,123 @@ public sealed class McpKernelPluginRegistrationCoordinator
         var resolution = _resolver.Resolve(options);
         var skippedServers = new List<McpServerSkipDecision>(resolution.SkippedServers);
         var registeredServers = new List<McpServerPluginRegistrationDecision>();
+        var serverRegistrationTasks = resolution.ValidServers
+            .OrderBy(static x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(static pair => (pair.Key, pair.Value))
+            .Select(pair => EvaluateServerRegistrationAsync(pair.Key, pair.Value, cancellationToken))
+            .ToArray();
 
-        foreach (var (serverName, serverOptions) in resolution.ValidServers.OrderBy(static x => x.Key, StringComparer.OrdinalIgnoreCase))
+        var registrationEvaluations = await Task.WhenAll(serverRegistrationTasks).ConfigureAwait(false);
+        foreach (var evaluation in registrationEvaluations
+                     .OrderBy(static r => r.ServerName, StringComparer.OrdinalIgnoreCase))
         {
-            var pluginAlias = _aliasProvider.GetPluginAlias(serverName);
-
-            var discovery = await DiscoverToolsAsync(serverName, serverOptions, cancellationToken).ConfigureAwait(false);
-            if (discovery is null)
+            if (evaluation.SkipDecision is not null)
             {
-                skippedServers.Add(new McpServerSkipDecision(
-                    serverName,
-                    McpServerSkipReason.ToolDiscoveryFailed,
-                    $"Skipped server '{serverName}' because no transport successfully discovered tools."));
+                skippedServers.Add(evaluation.SkipDecision);
                 continue;
             }
 
-            var selectedDiscovery = discovery.Value;
-
-            var discoveredTools = new HashSet<string>(
-                selectedDiscovery.Result.Tools.Select(static t => t.Name),
-                StringComparer.OrdinalIgnoreCase);
-            var requestedTools = serverOptions.AllowedTools
-                .Where(static name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var missingAllowedTools = requestedTools
-                .Where(tool => !discoveredTools.Contains(tool))
-                .OrderBy(static t => t, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (missingAllowedTools.Length > 0)
-            {
-                skippedServers.Add(new McpServerSkipDecision(
-                    serverName,
-                    McpServerSkipReason.MissingAllowedTools,
-                    $"Skipped server '{serverName}' because one or more allowed tools were missing from discovery.",
-                    missingAllowedTools));
-                continue;
-            }
-
-            var selectedTools = selectedDiscovery.Result.Tools
-                .Where(t => requestedTools.Contains(t.Name, StringComparer.OrdinalIgnoreCase))
-                .OrderBy(static t => t.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            _pluginRegistrar.RegisterAllowedTools(plugins, pluginAlias, serverName, selectedTools);
+            var registration = evaluation.SuccessfulRegistration!;
+            _pluginRegistrar.RegisterAllowedTools(
+                plugins,
+                registration.PluginAlias,
+                registration.ServerName,
+                registration.SelectedTools);
             registeredServers.Add(new McpServerPluginRegistrationDecision(
-                serverName,
-                pluginAlias,
-                selectedDiscovery.Client.TransportKind.ToString(),
-                selectedTools.Select(static t => t.Name).ToArray()));
+                registration.ServerName,
+                registration.PluginAlias,
+                registration.Transport,
+                registration.SelectedTools.Select(static t => t.Name).ToArray()));
         }
 
-        return new McpKernelPluginRegistrationResult(registeredServers, skippedServers);
+        var registrationResult = new McpKernelPluginRegistrationResult(registeredServers, skippedServers);
+        if (options.StrictStartup && registrationResult.SkippedServers.Count > 0)
+        {
+            throw new McpStrictStartupException(registrationResult);
+        }
+
+        return registrationResult;
     }
 
-    private async Task<(IMcpServerToolDiscoveryClient Client, McpServerToolDiscoveryResult Result)?> DiscoverToolsAsync(
+    private async Task<ServerRegistrationEvaluation> EvaluateServerRegistrationAsync(
         string serverName,
         ResolvedMcpServerOptions serverOptions,
         CancellationToken cancellationToken)
     {
+        var pluginAlias = _aliasProvider.GetPluginAlias(serverName);
+        var timeout = ResolveStartupTimeout(serverOptions.Startup);
+        var discovery = await DiscoverToolsAsync(serverName, serverOptions, timeout, cancellationToken).ConfigureAwait(false);
+        if (discovery.IsTimedOut)
+        {
+            return new ServerRegistrationEvaluation(
+                serverName,
+                new McpServerSkipDecision(
+                    serverName,
+                    McpServerSkipReason.StartupTimeout,
+                    $"Skipped server '{serverName}' because startup exceeded the timeout budget of {timeout.TotalSeconds:0} second(s)."),
+                null);
+        }
+
+        if (discovery.FailureWithoutTimeout)
+        {
+            return new ServerRegistrationEvaluation(
+                serverName,
+                new McpServerSkipDecision(
+                    serverName,
+                    McpServerSkipReason.ToolDiscoveryFailed,
+                    $"Skipped server '{serverName}' because no transport successfully discovered tools."),
+                null);
+        }
+
+        var selectedDiscovery = discovery.SuccessfulDiscovery!.Value;
+        var discoveredTools = new HashSet<string>(
+            selectedDiscovery.Result.Tools.Select(static t => t.Name),
+            StringComparer.OrdinalIgnoreCase);
+        var requestedTools = serverOptions.AllowedTools
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var missingAllowedTools = requestedTools
+            .Where(tool => !discoveredTools.Contains(tool))
+            .OrderBy(static t => t, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (missingAllowedTools.Length > 0)
+        {
+            return new ServerRegistrationEvaluation(
+                serverName,
+                new McpServerSkipDecision(
+                    serverName,
+                    McpServerSkipReason.MissingAllowedTools,
+                    $"Skipped server '{serverName}' because one or more allowed tools were missing from discovery.",
+                    missingAllowedTools),
+                null);
+        }
+
+        var selectedTools = selectedDiscovery.Result.Tools
+            .Where(t => requestedTools.Contains(t.Name, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(static t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new ServerRegistrationEvaluation(
+            serverName,
+            null,
+            new SuccessfulServerRegistration(
+                serverName,
+                pluginAlias,
+                selectedDiscovery.Client.TransportKind.ToString(),
+                selectedTools));
+    }
+
+    private async Task<ServerDiscoveryAttemptResult> DiscoverToolsAsync(
+        string serverName,
+        ResolvedMcpServerOptions serverOptions,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
         foreach (var discoveryClient in _discoveryClients)
         {
             var request = new McpServerToolDiscoveryRequest
@@ -304,14 +386,95 @@ public sealed class McpKernelPluginRegistrationCoordinator
                 TransportKind = discoveryClient.TransportKind
             };
 
-            var result = await discoveryClient.DiscoverToolsAsync(request, cancellationToken).ConfigureAwait(false);
+            McpServerToolDiscoveryResult result;
+            try
+            {
+                result = await discoveryClient.DiscoverToolsAsync(request, timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (IsTimeout(timeoutCts.Token, cancellationToken))
+            {
+                return ServerDiscoveryAttemptResult.TimedOut();
+            }
+            catch (Exception)
+            {
+                // Transport-specific failures should not block trying fallback transport kinds.
+                continue;
+            }
+
             if (result.IsSuccess)
             {
-                return (discoveryClient, result);
+                return ServerDiscoveryAttemptResult.Succeeded(discoveryClient, result);
+            }
+
+            if (IsTimeout(timeoutCts.Token, cancellationToken))
+            {
+                return ServerDiscoveryAttemptResult.TimedOut();
             }
         }
 
-        return null;
+        if (IsTimeout(timeoutCts.Token, cancellationToken))
+        {
+            return ServerDiscoveryAttemptResult.TimedOut();
+        }
+
+        return ServerDiscoveryAttemptResult.FailedWithoutTimeout();
+    }
+
+    private static bool IsTimeout(CancellationToken timeoutToken, CancellationToken rootToken) =>
+        timeoutToken.IsCancellationRequested && !rootToken.IsCancellationRequested;
+
+    private TimeSpan ResolveStartupTimeout(McpServerStartupOptions startup)
+    {
+        var configuredTimeoutSeconds = new[]
+        {
+            startup.ConnectTimeoutSeconds,
+            startup.InitializeTimeoutSeconds,
+            startup.ReadyTimeoutSeconds
+        }
+        .Where(static seconds => seconds is > 0)
+        .Select(static seconds => seconds!.Value)
+        .DefaultIfEmpty((int)_defaultServerStartupTimeout.TotalSeconds)
+        .Min();
+
+        return TimeSpan.FromSeconds(configuredTimeoutSeconds);
+    }
+
+    private sealed record SuccessfulServerRegistration(
+        string ServerName,
+        string PluginAlias,
+        string Transport,
+        IReadOnlyList<McpToolDescriptor> SelectedTools);
+
+    private sealed record ServerRegistrationEvaluation(
+        string ServerName,
+        McpServerSkipDecision? SkipDecision,
+        SuccessfulServerRegistration? SuccessfulRegistration);
+
+    private sealed class ServerDiscoveryAttemptResult
+    {
+        private ServerDiscoveryAttemptResult(
+            bool isTimedOut,
+            bool failureWithoutTimeout,
+            (IMcpServerToolDiscoveryClient Client, McpServerToolDiscoveryResult Result)? successfulDiscovery)
+        {
+            IsTimedOut = isTimedOut;
+            FailureWithoutTimeout = failureWithoutTimeout;
+            SuccessfulDiscovery = successfulDiscovery;
+        }
+
+        public bool IsTimedOut { get; }
+
+        public bool FailureWithoutTimeout { get; }
+
+        public (IMcpServerToolDiscoveryClient Client, McpServerToolDiscoveryResult Result)? SuccessfulDiscovery { get; }
+
+        public static ServerDiscoveryAttemptResult TimedOut() => new(true, false, null);
+
+        public static ServerDiscoveryAttemptResult FailedWithoutTimeout() => new(false, true, null);
+
+        public static ServerDiscoveryAttemptResult Succeeded(
+            IMcpServerToolDiscoveryClient client,
+            McpServerToolDiscoveryResult result) => new(false, false, (client, result));
     }
 }
 
