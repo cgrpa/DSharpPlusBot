@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.SemanticKernel;
+using ModelContextProtocol.Client;
 
 namespace TheSexy6BotWorker.Configuration;
 
@@ -82,7 +83,8 @@ public sealed class UnavailableMcpToolInvoker : IMcpToolInvoker
         CancellationToken cancellationToken)
     {
         return Task.FromResult(
-            $"MCP tool '{toolName}' via plugin '{pluginAlias}' is not available in this rollout stage.");
+            $"MCP tool '{toolName}' via plugin '{pluginAlias}' is currently unavailable. " +
+            "This call failed and no non-MCP fallback was executed.");
     }
 }
 
@@ -342,12 +344,20 @@ public sealed class McpKernelPluginRegistrationCoordinator
             .ToArray();
         if (missingAllowedTools.Length > 0)
         {
+            var discoveredToolNames = selectedDiscovery.Result.Tools
+                .Select(static tool => tool.Name)
+                .Where(static name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
             return new ServerRegistrationEvaluation(
                 serverName,
                 new McpServerSkipDecision(
                     serverName,
                     McpServerSkipReason.MissingAllowedTools,
-                    $"Skipped server '{serverName}' because one or more allowed tools were missing from discovery.",
+                    $"Skipped server '{serverName}' because one or more allowed tools were missing from discovery. " +
+                    $"Discovered tools: {(discoveredToolNames.Length == 0 ? "<none>" : string.Join(", ", discoveredToolNames))}.",
                     missingAllowedTools),
                 null);
         }
@@ -482,11 +492,11 @@ public sealed class NoOpStreamableHttpMcpToolDiscoveryClient : IMcpServerToolDis
 {
     public McpTransportKind TransportKind => McpTransportKind.StreamableHttp;
 
-    public Task<McpServerToolDiscoveryResult> DiscoverToolsAsync(
+    public async Task<McpServerToolDiscoveryResult> DiscoverToolsAsync(
         McpServerToolDiscoveryRequest request,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(McpServerToolDiscoveryResult.Failure("Not implemented."));
+        return await HttpMcpToolDiscovery.DiscoverToolsAsync(request, HttpTransportMode.StreamableHttp, cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -494,10 +504,43 @@ public sealed class NoOpSseMcpToolDiscoveryClient : IMcpServerToolDiscoveryClien
 {
     public McpTransportKind TransportKind => McpTransportKind.ServerSentEvents;
 
-    public Task<McpServerToolDiscoveryResult> DiscoverToolsAsync(
+    public async Task<McpServerToolDiscoveryResult> DiscoverToolsAsync(
         McpServerToolDiscoveryRequest request,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(McpServerToolDiscoveryResult.Failure("Not implemented."));
+        return await HttpMcpToolDiscovery.DiscoverToolsAsync(request, HttpTransportMode.Sse, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+internal static class HttpMcpToolDiscovery
+{
+    public static async Task<McpServerToolDiscoveryResult> DiscoverToolsAsync(
+        McpServerToolDiscoveryRequest request,
+        HttpTransportMode transportMode,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var endpoint = new Uri(request.Endpoint, UriKind.Absolute);
+        var transport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = endpoint,
+            TransportMode = transportMode,
+            AdditionalHeaders = new Dictionary<string, string>(request.Headers, StringComparer.OrdinalIgnoreCase)
+        });
+
+        await using var client = await McpClient.CreateAsync(
+            transport,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var discoveredTools = await client
+            .ListToolsAsync((ModelContextProtocol.RequestOptions?)null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var tools = discoveredTools
+            .Select(static tool => new McpToolDescriptor(tool.Name, tool.Description))
+            .ToArray();
+
+        return McpServerToolDiscoveryResult.Success(tools);
     }
 }

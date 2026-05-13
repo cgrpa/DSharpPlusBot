@@ -5,13 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "TheSexy6BotWorker",
+            "name": "TheSexy6BotWorker (Debug)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/TheSexy6BotWorker/bin/Debug/net9.0/TheSexy6BotWorker.dll",
+            "program": "${workspaceFolder}/src/dotnet/TheSexy6BotWorker/bin/Debug/net9.0/TheSexy6BotWorker.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/TheSexy6BotWorker",
+            "cwd": "${workspaceFolder}/src/dotnet/TheSexy6BotWorker",
             "console": "integratedTerminal",
             "stopAtEntry": false,
             "internalConsoleOptions": "neverOpen",
@@ -20,7 +20,9 @@
             },
             "requireExactSource": false,
             "env": {
-                "LOCAL_DEV": "true"
+                "DOTNET_ENVIRONMENT": "Development",
+                "Mcp__Enabled": "true",
+                "Mcp__StrictStartup": "false"
             }
         }
     ]

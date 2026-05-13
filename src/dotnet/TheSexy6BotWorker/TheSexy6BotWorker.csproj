@@ -15,6 +15,7 @@
     <PackageReference Include="DSharpPlus.Interactivity" Version="4.5.1" />
     <PackageReference Include="DSharpPlus.SlashCommands" Version="4.5.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.76.0" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.76.0" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.76.0-alpha" />

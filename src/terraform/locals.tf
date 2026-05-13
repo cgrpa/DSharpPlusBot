@@ -8,10 +8,10 @@ locals {
   name_prefix_no_dash = "${var.environment}${var.location_short}${var.application}"
 
   required_secret_alias_map = {
-    DiscordToken     = "discord-token"
-    GeminiKey        = "gemini-key"
-    GrokKey          = "grok-key"
-    PerplexityApiKey = "perplexity-api-key"
+    DiscordToken  = "discord-token"
+    GeminiKey     = "gemini-key"
+    GrokKey       = "grok-key"
+    TavilyApiKey  = "tavily-api-key"
   }
 
   required_secret_keys = toset(var.required_secret_names)

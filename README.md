@@ -121,8 +121,8 @@ dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csp
 # Set X.AI Grok API key
 dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "GrokKey" "your-grok-api-key"
 
-# Set Perplexity API key
-dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "PerplexityApiKey" "your-perplexity-api-key"
+# Set Tavily API key
+dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "TavilyApiKey" "your-tavily-api-key"
 ```
 
 **User Secrets ID**: `dotnet-TheSexy6BotWorker-d23e68fa-7622-4b43-ac67-735c9cf191f4`
@@ -209,7 +209,7 @@ docker build -t thesexy6bot:latest .
 docker run -e DiscordToken="your-token" \
            -e GeminiKey="your-key" \
            -e GrokKey="your-key" \
-           -e PerplexityApiKey="your-key" \
+           -e TavilyApiKey="your-key" \
            thesexy6bot:latest
 ```
 
@@ -280,7 +280,7 @@ var md = new ObjectMarkdownBuilder<Config>(config)
 | `DiscordToken` | Discord bot token | Yes |
 | `GeminiKey` | Google AI Gemini API key | Yes |
 | `GrokKey` | X.AI Grok API key | Yes |
-| `PerplexityApiKey` | Perplexity API key | Yes |
+| `TavilyApiKey` | Tavily API key | Yes |
 | `DOTNET_ENVIRONMENT` | Set to `Development` to enable test command prefixes | No |
 
 ## Key Dependencies

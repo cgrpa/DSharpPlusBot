@@ -82,10 +82,11 @@ public sealed class McpFeature : IMcpFeature
                      .OrderBy(static s => s.ServerName, StringComparer.OrdinalIgnoreCase))
         {
             _logger.LogInformation(
-                "MCP startup skipped server {ServerName}: {Reason} ({SanitizedReason}).",
+                "MCP startup skipped server {ServerName}: {Reason} ({SanitizedReason}). Detail: {DetailMessage}",
                 skipped.ServerName,
                 skipped.Reason,
-                ToSanitizedSkipReason(skipped));
+                ToSanitizedSkipReason(skipped),
+                skipped.Message);
         }
     }
 

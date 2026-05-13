@@ -11,7 +11,7 @@ Options:
   --discord-token <value>     Discord token (or set DISCORD_TOKEN)
   --gemini-key <value>        Gemini API key (or set GEMINI_KEY)
   --grok-key <value>          Grok API key (or set GROK_KEY)
-  --perplexity-key <value>    Perplexity API key (or set PERPLEXITY_API_KEY)
+  --tavily-key <value>        Tavily API key (or set TAVILY_API_KEY)
   --allow-partial             Allow partial updates (default is all-or-nothing)
   --non-interactive           Fail on missing inputs instead of prompting
   -h, --help                  Show this help
@@ -80,7 +80,7 @@ KEY_VAULT_NAME="${KEY_VAULT_NAME:-}"
 DISCORD_TOKEN="${DISCORD_TOKEN:-}"
 GEMINI_KEY="${GEMINI_KEY:-}"
 GROK_KEY="${GROK_KEY:-}"
-PERPLEXITY_API_KEY="${PERPLEXITY_API_KEY:-}"
+TAVILY_API_KEY="${TAVILY_API_KEY:-}"
 
 ALLOW_PARTIAL="false"
 NON_INTERACTIVE="false"
@@ -107,9 +107,9 @@ while [[ $# -gt 0 ]]; do
       GROK_KEY="$2"
       shift 2
       ;;
-    --perplexity-key)
-      require_option_value "--perplexity-key" "${2:-}"
-      PERPLEXITY_API_KEY="$2"
+    --tavily-key)
+      require_option_value "--tavily-key" "${2:-}"
+      TAVILY_API_KEY="$2"
       shift 2
       ;;
     --allow-partial)
@@ -154,7 +154,7 @@ fi
 DISCORD_TOKEN="$(read_secret_if_missing "DiscordToken" "$DISCORD_TOKEN")"
 GEMINI_KEY="$(read_secret_if_missing "GeminiKey" "$GEMINI_KEY")"
 GROK_KEY="$(read_secret_if_missing "GrokKey" "$GROK_KEY")"
-PERPLEXITY_API_KEY="$(read_secret_if_missing "PerplexityApiKey" "$PERPLEXITY_API_KEY")"
+TAVILY_API_KEY="$(read_secret_if_missing "TavilyApiKey" "$TAVILY_API_KEY")"
 
 missing_keys=()
 keys_to_update=()
@@ -175,7 +175,7 @@ append_secret_if_present() {
 append_secret_if_present "DiscordToken" "$DISCORD_TOKEN"
 append_secret_if_present "GeminiKey" "$GEMINI_KEY"
 append_secret_if_present "GrokKey" "$GROK_KEY"
-append_secret_if_present "PerplexityApiKey" "$PERPLEXITY_API_KEY"
+append_secret_if_present "TavilyApiKey" "$TAVILY_API_KEY"
 
 if [[ "$ALLOW_PARTIAL" != "true" && ${#missing_keys[@]} -gt 0 ]]; then
   echo "Refusing partial update. Missing values for: ${missing_keys[*]}" >&2

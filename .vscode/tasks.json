@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/TheSexy6BotWorker/TheSexy6BotWorker.csproj",
+                "${workspaceFolder}/src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],

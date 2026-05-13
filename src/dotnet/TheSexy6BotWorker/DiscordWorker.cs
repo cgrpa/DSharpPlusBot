@@ -62,14 +62,6 @@ namespace TheSexy6BotWorker
                     return registry;
                 });
 
-                services.AddHttpClient<PerplexitySearchService>(client =>
-                {
-                    client.BaseAddress = new Uri("https://api.perplexity.ai");
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer", Guard.Against.NullOrEmpty(_configuration["PerplexityApiKey"], "PerplexityApiKey")
-                    );
-                });
-
                 // Add WeatherService with two HttpClients for OpenMeteo APIs
                 services.AddHttpClient("WeatherClient", client =>
                 {
@@ -100,9 +92,6 @@ namespace TheSexy6BotWorker
                             apiKey: _configuration["GrokKey"],
                             endpoint: new Uri("https://api.x.ai/v1/"),
                             serviceId: "grok");
-
-                        var perplexityService = sp.GetRequiredService<PerplexitySearchService>();
-                        kernelBuilder.Plugins.AddFromObject(perplexityService, "PerplexitySearchService");
 
                         var weatherService = sp.GetRequiredService<WeatherService>();
                         kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");

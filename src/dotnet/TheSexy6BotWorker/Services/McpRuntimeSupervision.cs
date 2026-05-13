@@ -78,8 +78,13 @@ public sealed class NoOpMcpRuntimeClient : IMcpRuntimeClient
 
     public Task<string> InvokeAsync(McpRuntimeInvocationRequest request, CancellationToken cancellationToken)
     {
-        return Task.FromResult(
-            $"MCP tool '{request.ToolName}' via plugin '{request.Server.PluginAlias}' is not available in this rollout stage.");
+        return Task.FromResult(CreateUnavailableMessage(request.Server.PluginAlias, request.ToolName));
+    }
+
+    private static string CreateUnavailableMessage(string pluginAlias, string toolName)
+    {
+        return $"MCP tool '{toolName}' via plugin '{pluginAlias}' is currently unavailable. " +
+               "This call failed and no non-MCP fallback was executed.";
     }
 }
 
@@ -193,8 +198,14 @@ public sealed class McpRuntimeSupervisor : IMcpRuntimeSupervisor, IDisposable
         return new McpRuntimeInvocationOutcome
         {
             IsSuccess = false,
-            Content = $"MCP tool '{toolName}' via plugin '{pluginAlias}' is not available in this rollout stage."
+            Content = CreateMcpUnavailableMessage(pluginAlias, toolName)
         };
+    }
+
+    private static string CreateMcpUnavailableMessage(string pluginAlias, string toolName)
+    {
+        return $"MCP tool '{toolName}' via plugin '{pluginAlias}' is currently unavailable. " +
+               "This call failed and no non-MCP fallback was executed.";
     }
 
     private sealed class RuntimeSession

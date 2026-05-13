@@ -195,3 +195,9 @@ Registration and discovery contract:
 - Only `AllowedTools` are registered into the kernel plugin.
 - If any configured allowed tool is missing from discovery, that entire server is skipped (no partial registration).
 - Tavily plugin alias is fixed as `TavilyRemoteMcp`; non-Tavily aliases are deterministic (`<ServerName>RemoteMcp`).
+
+Runtime invocation contract and prompt guidance:
+
+- If an MCP tool is unavailable at runtime (server disconnected, connect failure, or tool outside the fixed allowlist), invocation returns an explicit failure message.
+- Failure text must be treated as authoritative: `This call failed and no non-MCP fallback was executed.`
+- Prompt/tool behavior should not silently substitute a different path when MCP is unavailable. The assistant should communicate the failure clearly and ask the user whether to retry or proceed without MCP-backed data.

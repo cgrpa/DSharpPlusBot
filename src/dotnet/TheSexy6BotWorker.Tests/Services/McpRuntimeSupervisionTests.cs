@@ -21,6 +21,23 @@ public class McpRuntimeSupervisionTests
     }
 
     [Fact]
+    public void ExponentialReconnectPolicy_ThrowsForNonPositiveAttempt()
+    {
+        var policy = new ExponentialMcpReconnectDelayPolicy(new SequenceJitterProvider(0d));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => policy.GetDelay(0));
+    }
+
+    [Fact]
+    public void ExponentialReconnectPolicy_ClampsOutOfRangeJitterValues()
+    {
+        var policy = new ExponentialMcpReconnectDelayPolicy(new SequenceJitterProvider(-10d, 10d));
+
+        Assert.Equal(2000, policy.GetDelay(1).TotalMilliseconds);
+        Assert.Equal(4800, policy.GetDelay(2).TotalMilliseconds);
+    }
+
+    [Fact]
     public async Task InvokeAsync_RejectsToolsOutsideFixedRegisteredSurface()
     {
         var runtimeClient = new ScriptedRuntimeClient();
@@ -38,7 +55,7 @@ public class McpRuntimeSupervisionTests
             CancellationToken.None);
 
         Assert.False(outcome.IsSuccess);
-        Assert.Contains("not available", outcome.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("currently unavailable", outcome.Content, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, runtimeClient.ConnectCalls);
         Assert.Equal(0, runtimeClient.InvokeCalls);
         Assert.Empty(telemetrySink.Events);
@@ -69,7 +86,7 @@ public class McpRuntimeSupervisionTests
             CancellationToken.None);
 
         Assert.False(outcome.IsSuccess);
-        Assert.Contains("not available", outcome.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("currently unavailable", outcome.Content, StringComparison.OrdinalIgnoreCase);
 
         await WaitForAsync(() => runtimeClient.ConnectCalls >= 3);
 

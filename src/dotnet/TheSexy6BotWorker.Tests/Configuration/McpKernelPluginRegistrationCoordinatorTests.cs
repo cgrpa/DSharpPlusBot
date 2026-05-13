@@ -245,6 +245,44 @@ public class McpKernelPluginRegistrationCoordinatorTests
     }
 
     [Fact]
+    public async Task RegisterAsync_WhenStrictStartupIsEnabled_IncludesResolverAndDiscoverySkipsInFailure()
+    {
+        var options = CreateEnabledOptions(
+            ("Tavily", new McpServerOptions
+            {
+                AllowedTools = ["search"],
+                Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Authorization"] = "Bearer ${TavilyApiKey}"
+                }
+            }),
+            ("Weather", new McpServerOptions
+            {
+                AllowedTools = ["forecast"]
+            }));
+        options.StrictStartup = true;
+
+        var discovery = new FakeDiscoveryClient(
+            McpTransportKind.StreamableHttp,
+            (_, _) => Task.FromResult(McpServerToolDiscoveryResult.Failure("Server unavailable")));
+
+        var registrar = new RecordingPluginRegistrar();
+        var coordinator = CreateCoordinator([discovery], registrar);
+
+        var exception = await Assert.ThrowsAsync<McpStrictStartupException>(() =>
+            coordinator.RegisterAsync(new FakeKernelBuilderPlugins(), options));
+
+        Assert.Empty(exception.RegistrationResult.RegisteredServers);
+        Assert.Equal(2, exception.RegistrationResult.SkippedServers.Count);
+        Assert.Contains(
+            exception.RegistrationResult.SkippedServers,
+            s => s.ServerName == "Tavily" && s.Reason == McpServerSkipReason.MissingInterpolatedValue);
+        Assert.Contains(
+            exception.RegistrationResult.SkippedServers,
+            s => s.ServerName == "Weather" && s.Reason == McpServerSkipReason.ToolDiscoveryFailed);
+    }
+
+    [Fact]
     public async Task RegisterAsync_UsesDefaultStartupTimeoutWhenServerDoesNotOverride()
     {
         var options = CreateEnabledOptions(("Tavily", new McpServerOptions

@@ -141,6 +141,30 @@ public class McpServerConfigurationResolverTests
         Assert.Empty(result.SkippedServers);
     }
 
+    [Fact]
+    public void Resolve_MissingInterpolations_AreReportedDeterministically()
+    {
+        var options = CreateOptions(("Tavily", new McpServerOptions
+        {
+            Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Authorization"] = "Bearer ${ZedKey}",
+                ["X-Context"] = "${AlphaKey}:${ZedKey}:${BetaKey}"
+            }
+        }));
+
+        var resolver = new McpServerConfigurationResolver(
+            BuildConfiguration(new Dictionary<string, string?>()),
+            new DictionaryEnvironmentVariableProvider(new Dictionary<string, string?>()));
+
+        var result = resolver.Resolve(options);
+
+        Assert.Empty(result.ValidServers);
+        var skipped = Assert.Single(result.SkippedServers);
+        Assert.Equal(McpServerSkipReason.MissingInterpolatedValue, skipped.Reason);
+        Assert.Equal(["AlphaKey", "BetaKey", "ZedKey"], skipped.MissingInterpolationKeys);
+    }
+
     private static McpOptions CreateOptions(params (string Name, McpServerOptions Server)[] servers)
     {
         var options = new McpOptions();
