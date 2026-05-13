@@ -6,14 +6,7 @@ namespace TheSexy6BotWorker.Configuration;
 
 public class GrokBotConfiguration : IBotConfiguration
 {
-    private readonly string _environmentPrefix;
-
-    public GrokBotConfiguration(string environmentPrefix = "")
-    {
-        _environmentPrefix = environmentPrefix;
-    }
-
-    public string Prefix => $"{_environmentPrefix}grok";
+    public string Prefix => "grok";
     
     public string ServiceId => "grok";
     

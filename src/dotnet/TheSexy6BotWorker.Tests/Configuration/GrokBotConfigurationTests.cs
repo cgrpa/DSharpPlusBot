@@ -18,16 +18,6 @@ public class GrokBotConfigurationTests
     }
 
     [Fact]
-    public void Constructor_WithEnvironmentPrefix_SetsCustomPrefix()
-    {
-        // Arrange & Act
-        var config = new GrokBotConfiguration("test-");
-
-        // Assert
-        Assert.Equal("test-grok", config.Prefix);
-    }
-
-    [Fact]
     public void ServiceId_ReturnsCorrectValue()
     {
         // Arrange
@@ -171,20 +161,6 @@ public class GrokBotConfigurationTests
 
         // Act & Assert
         Assert.True(config.SupportsImages);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("test-")]
-    [InlineData("dev-")]
-    [InlineData("prod-")]
-    public void Constructor_WithVariousPrefixes_SetsCorrectPrefix(string environmentPrefix)
-    {
-        // Arrange & Act
-        var config = new GrokBotConfiguration(environmentPrefix);
-
-        // Assert
-        Assert.Equal($"{environmentPrefix}grok", config.Prefix);
     }
 
     [Fact]

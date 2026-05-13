@@ -121,19 +121,16 @@ public class BotConfigurationExtensionsTests
         Assert.Contains("0.7", description);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("test-")]
-    [InlineData("dev-")]
-    public void GenerateConfigurationDescription_IncludesEnvironmentPrefix(string prefix)
+    [Fact]
+    public void GenerateConfigurationDescription_IncludesCanonicalPrefix()
     {
         // Arrange
-        var config = new GeminiBotConfiguration(prefix);
+        var config = new GeminiBotConfiguration();
 
         // Act
         var description = config.GenerateConfigurationDescription();
 
         // Assert
-        Assert.Contains($"{prefix}gemini", description);
+        Assert.Contains("gemini", description);
     }
 }

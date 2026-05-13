@@ -1,5 +1,4 @@
-using Microsoft.SemanticKernel;
-using TheSexy6BotWorker.Handlers;
+using TheSexy6BotWorker.Configuration;
 
 namespace TheSexy6BotWorker
 {
@@ -15,7 +14,7 @@ namespace TheSexy6BotWorker
                 .ToArray();
 
             var builder = Host.CreateApplicationBuilder(hostArgs);
-            if (builder.Environment.IsDevelopment())
+            if (HostEnvironmentMode.ShouldLoadUserSecrets(builder.Environment))
             {
                 builder.Configuration.AddUserSecrets<Program>();
             }
@@ -32,6 +31,7 @@ namespace TheSexy6BotWorker
             if (isSmokeTest)
             {
                 Console.WriteLine("Container smoke test passed.");
+                Console.WriteLine($"DOTNET_ENVIRONMENT={builder.Environment.EnvironmentName}");
                 Console.WriteLine($"APP_VERSION={Environment.GetEnvironmentVariable("APP_VERSION") ?? "unset"}");
                 Console.WriteLine($"APP_COMMIT_MSG={Environment.GetEnvironmentVariable("APP_COMMIT_MSG") ?? "unset"}");
                 return 0;

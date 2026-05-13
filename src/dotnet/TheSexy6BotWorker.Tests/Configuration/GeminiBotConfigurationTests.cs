@@ -17,16 +17,6 @@ public class GeminiBotConfigurationTests
     }
 
     [Fact]
-    public void Constructor_WithEnvironmentPrefix_SetsCustomPrefix()
-    {
-        // Arrange & Act
-        var config = new GeminiBotConfiguration("test-");
-
-        // Assert
-        Assert.Equal("test-gemini", config.Prefix);
-    }
-
-    [Fact]
     public void ServiceId_ReturnsCorrectValue()
     {
         // Arrange
@@ -117,20 +107,6 @@ public class GeminiBotConfigurationTests
 
         // Act & Assert
         Assert.False(config.SupportsImages);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("test-")]
-    [InlineData("dev-")]
-    [InlineData("prod-")]
-    public void Constructor_WithVariousPrefixes_SetsCorrectPrefix(string environmentPrefix)
-    {
-        // Arrange & Act
-        var config = new GeminiBotConfiguration(environmentPrefix);
-
-        // Assert
-        Assert.Equal($"{environmentPrefix}gemini", config.Prefix);
     }
 
     [Fact]

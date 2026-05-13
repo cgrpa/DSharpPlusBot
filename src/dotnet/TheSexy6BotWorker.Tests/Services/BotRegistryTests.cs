@@ -255,11 +255,11 @@ public class BotRegistryTests
     }
 
     [Fact]
-    public void TryGetBot_WithEnvironmentPrefix_MatchesCorrectly()
+    public void TryGetBot_WithMessagePrefixConfigured_MatchesCorrectly()
     {
         // Arrange
-        var registry = new BotRegistry();
-        registry.Register(new GeminiBotConfiguration("test-"));
+        var registry = new BotRegistry("test-");
+        registry.Register(new GeminiBotConfiguration());
         var message = "test-gemini hello world";
 
         // Act
@@ -268,8 +268,25 @@ public class BotRegistryTests
         // Assert
         Assert.True(found);
         Assert.NotNull(result);
-        Assert.Equal("test-gemini", result.Prefix);
+        Assert.Equal("gemini", result.Prefix);
         Assert.Equal("hello world", strippedMessage);
+    }
+
+    [Fact]
+    public void TryGetBot_WithMessagePrefixConfigured_WithoutPrefix_DoesNotMatch()
+    {
+        // Arrange
+        var registry = new BotRegistry("test-");
+        registry.Register(new GeminiBotConfiguration());
+        var message = "gemini hello world";
+
+        // Act
+        var found = registry.TryGetBot(message, out var result, out var strippedMessage);
+
+        // Assert
+        Assert.False(found);
+        Assert.Null(result);
+        Assert.Equal(message, strippedMessage);
     }
 
     [Fact]

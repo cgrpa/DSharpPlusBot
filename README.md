@@ -1,4 +1,4 @@
-# TheSexy6BotWorker
+# DSharpPlusBot
 
 A Discord bot built as a .NET 9.0 Worker Service that integrates multiple AI models (Google Gemini and X.AI Grok) with Microsoft Semantic Kernel for function calling capabilities. Features a modular bot architecture with engagement mode for autonomous conversation participation.
 
@@ -112,19 +112,17 @@ cd DSharpPlusBot
 This project uses .NET User Secrets to store sensitive configuration. Set up your secrets with:
 
 ```bash
-cd TheSexy6BotWorker
-
 # Set Discord bot token
-dotnet user-secrets set "DiscordToken" "your-discord-bot-token"
+dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "DiscordToken" "your-discord-bot-token"
 
 # Set Google AI Gemini API key
-dotnet user-secrets set "GeminiKey" "your-gemini-api-key"
+dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "GeminiKey" "your-gemini-api-key"
 
 # Set X.AI Grok API key
-dotnet user-secrets set "GrokKey" "your-grok-api-key"
+dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "GrokKey" "your-grok-api-key"
 
 # Set Perplexity API key
-dotnet user-secrets set "PerplexityApiKey" "your-perplexity-api-key"
+dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj set "PerplexityApiKey" "your-perplexity-api-key"
 ```
 
 **User Secrets ID**: `dotnet-TheSexy6BotWorker-d23e68fa-7622-4b43-ac67-735c9cf191f4`
@@ -136,22 +134,23 @@ dotnet user-secrets set "PerplexityApiKey" "your-perplexity-api-key"
 List your configured secrets:
 
 ```bash
-dotnet user-secrets list
+dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj list
 ```
 
 ### 4. Restore Dependencies
 
 ```bash
-cd ..
-dotnet restore
+dotnet restore TheSexy6BotWorker.slnx
 ```
 
 ## Running Locally
 
+For remote staging secret wiring and runbook steps, see `src/terraform/README.md`.
+
 ### Standard Mode (Production Commands)
 
 ```bash
-dotnet run --project TheSexy6BotWorker/TheSexy6BotWorker.csproj
+dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
 ```
 
 In Discord:
@@ -169,14 +168,14 @@ In Discord:
 
 ### Local Development Mode (Test Commands)
 
-Set the `LOCAL_DEV` environment variable to add "test-" prefix:
+Set `DOTNET_ENVIRONMENT=Development` to add the `test-` command prefix:
 
 ```bash
 # PowerShell
-$env:LOCAL_DEV="true"; dotnet run --project TheSexy6BotWorker/TheSexy6BotWorker.csproj
+$env:DOTNET_ENVIRONMENT="Development"; dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
 
 # Bash/Linux
-LOCAL_DEV=true dotnet run --project TheSexy6BotWorker/TheSexy6BotWorker.csproj
+DOTNET_ENVIRONMENT=Development dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
 ```
 
 Commands become: `test-gemini`, `test-grok`, `test-ping`
@@ -230,41 +229,15 @@ docker buildx build --platform linux/amd64 \
 ## Project Structure
 
 ```
-TheSexy6BotWorker/
-├── Commands/                    # DSharpPlus command definitions
-│   └── PingCommand.cs
-├── Configuration/               # Bot configuration implementations
-│   ├── BotConfigurationExtensions.cs
-│   ├── GeminiBotConfiguration.cs
-│   └── GrokBotConfiguration.cs
-├── Contracts/                   # Interfaces
-│   ├── IBotConfiguration.cs
-│   └── IConversationSessionManager.cs
-├── DTOs/                        # Data transfer objects
-├── Handlers/                    # Discord event handlers
-│   └── MessageCreatedHandler.cs
-├── Markdown/                    # Fluent markdown generation library
-│   ├── MarkdownBuilder.cs
-│   ├── MarkdownGenerator.cs     # ObjectMarkdownBuilder<T>
-│   └── *Attribute.cs            # MarkdownProperty, MarkdownIgnore, etc.
-├── Models/                      # Domain models
-│   ├── BotConfigurationModel.cs
-│   ├── ConversationSession.cs
-│   └── EngagementDecision.cs    # Structured output for engagement mode
-├── Services/                    # Application services
-│   ├── BotRegistry.cs           # Bot lookup by prefix
-│   ├── ConversationSessionManager.cs
-│   ├── DynamicStatusService.cs
-│   ├── PerplexitySearchService.cs
-│   └── WeatherService.cs
-├── Program.cs
-└── DiscordWorker.cs
-
-TheSexy6BotWorker.Tests/         # xUnit test project
-├── Configuration/
-├── Integration/
-├── Markdown/
-└── Services/
+DSharpPlusBot/
+├── src/
+│   ├── dotnet/
+│   │   ├── TheSexy6BotWorker/       # Main worker project
+│   │   └── TheSexy6BotWorker.Tests/ # xUnit test project
+│   └── terraform/                   # Azure infra + secret contract
+├── Dockerfile
+├── TheSexy6BotWorker.slnx
+└── README.md
 ```
 
 ## Core Components
@@ -308,7 +281,7 @@ var md = new ObjectMarkdownBuilder<Config>(config)
 | `GeminiKey` | Google AI Gemini API key | Yes |
 | `GrokKey` | X.AI Grok API key | Yes |
 | `PerplexityApiKey` | Perplexity API key | Yes |
-| `LOCAL_DEV` | Enable test command prefixes | No |
+| `DOTNET_ENVIRONMENT` | Set to `Development` to enable test command prefixes | No |
 
 ## Key Dependencies
 
@@ -320,7 +293,7 @@ var md = new ObjectMarkdownBuilder<Config>(config)
 ## Troubleshooting
 
 ### Bot Not Responding
-- Verify all user secrets are set: `dotnet user-secrets list`
+- Verify all user secrets are set: `dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj list`
 - Check Discord bot has Message Content intent enabled
 - Ensure bot has appropriate permissions in your Discord server
 
