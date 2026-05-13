@@ -179,3 +179,16 @@ MCP rollout is controlled under the `Mcp` section. The default contract is inten
 ```
 
 The `${TavilyApiKey}` placeholder is interpolation syntax. Define `TavilyApiKey` in user-secrets or environment variables and keep `Mcp:Enabled=false` until rollout is ready.
+
+Interpolation and validation contract:
+
+- Placeholder resolution order is configuration first, then OS environment variable fallback.
+- If interpolation cannot resolve one or more placeholders, only that MCP server is skipped (degraded startup contract).
+- Tavily `DEFAULT_PARAMETERS` is supported via headers and must be valid JSON; malformed JSON marks only that server as skipped.
+
+Registration and discovery contract:
+
+- Transport auto-detection order is `StreamableHttp` first, then `ServerSentEvents` fallback.
+- Only `AllowedTools` are registered into the kernel plugin.
+- If any configured allowed tool is missing from discovery, that entire server is skipped (no partial registration).
+- Tavily plugin alias is fixed as `TavilyRemoteMcp`; non-Tavily aliases are deterministic (`<ServerName>RemoteMcp`).

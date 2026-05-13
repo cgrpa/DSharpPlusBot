@@ -23,6 +23,15 @@ namespace TheSexy6BotWorker
                 .AddOptions<McpOptions>()
                 .Bind(builder.Configuration.GetSection(McpOptions.SectionName));
 
+            builder.Services.AddSingleton<IEnvironmentVariableProvider, ProcessEnvironmentVariableProvider>();
+            builder.Services.AddSingleton<McpServerConfigurationResolver>();
+            builder.Services.AddSingleton<IMcpToolInvoker, UnavailableMcpToolInvoker>();
+            builder.Services.AddSingleton<IMcpKernelPluginRegistrar, SemanticKernelMcpPluginRegistrar>();
+            builder.Services.AddSingleton<IMcpServerPluginAliasProvider, StableMcpServerPluginAliasProvider>();
+            builder.Services.AddSingleton<IMcpServerToolDiscoveryClient, NoOpStreamableHttpMcpToolDiscoveryClient>();
+            builder.Services.AddSingleton<IMcpServerToolDiscoveryClient, NoOpSseMcpToolDiscoveryClient>();
+            builder.Services.AddSingleton<McpKernelPluginRegistrationCoordinator>();
+
             if (!isSmokeTest)
             {
                 builder.Services

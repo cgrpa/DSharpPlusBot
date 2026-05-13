@@ -5,6 +5,7 @@ using DSharpPlus.Commands.Processors.TextCommands;
 using DSharpPlus.Commands.Processors.TextCommands.Parsing;
 using DSharpPlus.Entities;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using System;
 using System.Collections.Generic;
@@ -24,16 +25,22 @@ namespace TheSexy6BotWorker
         private readonly ILogger<DiscordWorker> _logger;
         private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _hostEnvironment;
+        private readonly McpOptions _mcpOptions;
+        private readonly McpKernelPluginRegistrationCoordinator _mcpRegistrationCoordinator;
         private DiscordClient _client;
 
         public DiscordWorker(
             ILogger<DiscordWorker> logger,
             IConfiguration configuration,
-            IHostEnvironment hostEnvironment)
+            IHostEnvironment hostEnvironment,
+            IOptions<McpOptions> mcpOptions,
+            McpKernelPluginRegistrationCoordinator mcpRegistrationCoordinator)
         {
             _logger = logger;
             _configuration = configuration;
             _hostEnvironment = hostEnvironment;
+            _mcpOptions = mcpOptions?.Value ?? throw new ArgumentNullException(nameof(mcpOptions));
+            _mcpRegistrationCoordinator = mcpRegistrationCoordinator ?? throw new ArgumentNullException(nameof(mcpRegistrationCoordinator));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -108,6 +115,30 @@ namespace TheSexy6BotWorker
 
                         var weatherService = sp.GetRequiredService<WeatherService>();
                         kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");
+
+                        var mcpRegistrationResult = _mcpRegistrationCoordinator
+                            .RegisterAsync(kernelBuilder.Plugins, _mcpOptions, CancellationToken.None)
+                            .GetAwaiter()
+                            .GetResult();
+
+                        foreach (var registration in mcpRegistrationResult.RegisteredServers)
+                        {
+                            _logger.LogInformation(
+                                "Registered MCP server {ServerName} as plugin {PluginAlias} via {Transport} with tools: {Tools}.",
+                                registration.ServerName,
+                                registration.PluginAlias,
+                                registration.Transport,
+                                string.Join(", ", registration.RegisteredTools));
+                        }
+
+                        foreach (var skipped in mcpRegistrationResult.SkippedServers)
+                        {
+                            _logger.LogWarning(
+                                "Skipped MCP server {ServerName}: {Reason} ({Message})",
+                                skipped.ServerName,
+                                skipped.Reason,
+                                skipped.Message);
+                        }
 
                         return kernelBuilder.Build();
                     });
