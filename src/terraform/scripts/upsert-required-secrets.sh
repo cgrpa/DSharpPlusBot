@@ -18,12 +18,42 @@ Options:
 EOF
 }
 
+require_option_value() {
+  local option_name="$1"
+  local option_value="${2:-}"
+
+  if [[ -z "$option_value" || "$option_value" == --* ]]; then
+    echo "Missing value for $option_name." >&2
+    usage >&2
+    exit 1
+  fi
+}
+
 require_command() {
   local command_name="$1"
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Required command is missing: $command_name" >&2
     exit 1
   fi
+}
+
+read_value_if_missing() {
+  local label="$1"
+  local current_value="$2"
+
+  if [[ -n "$current_value" ]]; then
+    printf '%s' "$current_value"
+    return
+  fi
+
+  if [[ "$NON_INTERACTIVE" == "true" ]]; then
+    printf ''
+    return
+  fi
+
+  local entered_value
+  read -r -p "$label: " entered_value
+  printf '%s' "$entered_value"
 }
 
 read_secret_if_missing() {
@@ -58,22 +88,27 @@ NON_INTERACTIVE="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --vault-name)
+      require_option_value "--vault-name" "${2:-}"
       KEY_VAULT_NAME="$2"
       shift 2
       ;;
     --discord-token)
+      require_option_value "--discord-token" "${2:-}"
       DISCORD_TOKEN="$2"
       shift 2
       ;;
     --gemini-key)
+      require_option_value "--gemini-key" "${2:-}"
       GEMINI_KEY="$2"
       shift 2
       ;;
     --grok-key)
+      require_option_value "--grok-key" "${2:-}"
       GROK_KEY="$2"
       shift 2
       ;;
     --perplexity-key)
+      require_option_value "--perplexity-key" "${2:-}"
       PERPLEXITY_API_KEY="$2"
       shift 2
       ;;
@@ -96,6 +131,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+KEY_VAULT_NAME="$(read_value_if_missing "Key Vault name" "$KEY_VAULT_NAME")"
 
 if [[ -z "$KEY_VAULT_NAME" ]]; then
   echo "Missing Key Vault name. Set KEY_VAULT_NAME or pass --vault-name." >&2

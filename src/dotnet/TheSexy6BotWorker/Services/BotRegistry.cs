@@ -6,6 +6,12 @@ namespace TheSexy6BotWorker.Services;
 public class BotRegistry
 {
     private readonly Dictionary<string, IBotConfiguration> _bots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly string _messagePrefix;
+
+    public BotRegistry(string messagePrefix = "")
+    {
+        _messagePrefix = messagePrefix ?? throw new ArgumentNullException(nameof(messagePrefix));
+    }
 
     /// <summary>
     /// Registers a bot configuration with the registry
@@ -36,18 +42,30 @@ public class BotRegistry
 
         bot = null;
         strippedMessage = messageContent;
+        var contentToMatch = messageContent;
+
+        if (!string.IsNullOrEmpty(_messagePrefix))
+        {
+            if (!messageContent.StartsWith(_messagePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            contentToMatch = messageContent[_messagePrefix.Length..].TrimStart();
+            strippedMessage = contentToMatch;
+        }
 
         foreach (var kvp in _bots)
         {
             var prefix = kvp.Key;
             
             // Check if message starts with this bot's prefix (case-insensitive)
-            if (messageContent.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            if (contentToMatch.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 bot = kvp.Value;
                 
                 // Strip the prefix and any leading whitespace
-                strippedMessage = messageContent.Substring(prefix.Length).TrimStart();
+                strippedMessage = contentToMatch[prefix.Length..].TrimStart();
                 
                 return true;
             }

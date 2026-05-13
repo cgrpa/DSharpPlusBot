@@ -78,18 +78,18 @@ public class MarkdownIntegrationTests
     }
 
     [Fact]
-    public void BotConfiguration_WithEnvironmentPrefix_ReflectsInMarkdown()
+    public void BotConfiguration_UsesCanonicalPrefix_InMarkdown()
     {
         // Arrange
-        IBotConfiguration config = new GrokBotConfiguration("test-");
+        IBotConfiguration config = new GrokBotConfiguration();
 
         // Act
         var markdown = config.GetConfigurationDescription();
 
         // Assert
-        Assert.Contains("test-grok", markdown);
+        Assert.Contains("grok", markdown);
         
-        _output.WriteLine("=== Test Environment Bot ===");
+        _output.WriteLine("=== Canonical Prefix Bot ===");
         _output.WriteLine(markdown);
     }
 

@@ -31,15 +31,15 @@ public class BotConfigurationIntegrationTests
     }
 
     [Fact]
-    public void Registry_WithEnvironmentPrefixes_HandlesCollisions()
+    public void Registry_WithDuplicateCanonicalPrefixes_HandlesCollisions()
     {
         // Arrange
         var registry = new BotRegistry();
-        registry.Register(new GeminiBotConfiguration("test-"));
+        registry.Register(new GeminiBotConfiguration());
         
         // Act - trying to register same bot with same prefix should throw
         var exception = Assert.Throws<InvalidOperationException>(() => 
-            registry.Register(new GeminiBotConfiguration("test-")));
+            registry.Register(new GeminiBotConfiguration()));
 
         // Assert
         Assert.Contains("already registered", exception.Message);
@@ -92,14 +92,12 @@ public class BotConfigurationIntegrationTests
     [InlineData("gemini what is AI?", "gemini", "what is AI?")]
     [InlineData("grok tell me a joke", "grok", "tell me a joke")]
     [InlineData("GEMINI case test", "gemini", "case test")]
-    [InlineData("test-grok hello", "test-grok", "hello")]
     public void Registry_MessageParsing_HandlesVariousFormats(string message, string expectedPrefix, string expectedStripped)
     {
         // Arrange
         var registry = new BotRegistry();
         registry.Register(new GeminiBotConfiguration());
         registry.Register(new GrokBotConfiguration());
-        registry.Register(new GrokBotConfiguration("test-"));
 
         // Act
         var found = registry.TryGetBot(message, out var bot, out var strippedMessage);
@@ -108,6 +106,23 @@ public class BotConfigurationIntegrationTests
         Assert.True(found);
         Assert.Equal(expectedPrefix, bot!.Prefix);
         Assert.Equal(expectedStripped, strippedMessage);
+    }
+
+    [Fact]
+    public void Registry_MessageParsing_WithMessagePrefix_HandlesDevFormat()
+    {
+        // Arrange
+        var registry = new BotRegistry("test-");
+        registry.Register(new GeminiBotConfiguration());
+        registry.Register(new GrokBotConfiguration());
+
+        // Act
+        var found = registry.TryGetBot("test-grok hello", out var bot, out var strippedMessage);
+
+        // Assert
+        Assert.True(found);
+        Assert.Equal("grok", bot!.Prefix);
+        Assert.Equal("hello", strippedMessage);
     }
 
     [Fact]

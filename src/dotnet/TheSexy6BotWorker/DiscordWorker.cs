@@ -48,18 +48,18 @@ namespace TheSexy6BotWorker
             builder.ConfigureServices(services =>
             {
                 // Determine environment prefix for bot commands
-                var environmentPrefix = _hostEnvironment.IsDevelopment() ? "test-" : "";
+                var messagePrefix = HostEnvironmentMode.GetMessagePrefix(_hostEnvironment);
 
                 // Register bot registry and configurations
                 services.AddSingleton(sp =>
                 {
-                    var registry = new BotRegistry();
+                    var registry = new BotRegistry(messagePrefix);
                     
                     // Register Gemini bot
-                    registry.Register(new GeminiBotConfiguration(environmentPrefix));
+                    registry.Register(new GeminiBotConfiguration());
                     
                     // Register Grok bot
-                    registry.Register(new GrokBotConfiguration(environmentPrefix));
+                    registry.Register(new GrokBotConfiguration());
                     
                     return registry;
                 });

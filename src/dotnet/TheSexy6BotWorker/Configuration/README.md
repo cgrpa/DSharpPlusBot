@@ -25,14 +25,7 @@ namespace TheSexy6BotWorker.Configuration;
 
 public class ClaudeBotConfiguration : IBotConfiguration
 {
-    private readonly string _environmentPrefix;
-
-    public ClaudeBotConfiguration(string environmentPrefix = "")
-    {
-        _environmentPrefix = environmentPrefix;
-    }
-
-    public string Prefix => $"{_environmentPrefix}claude";
+    public string Prefix => "claude";
     
     public string ServiceId => "claude";
     
@@ -71,10 +64,10 @@ In `DiscordWorker.cs`, add to the bot registry:
 ```csharp
 services.AddSingleton(sp =>
 {
-    var registry = new BotRegistry();
-    registry.Register(new GeminiBotConfiguration(environmentPrefix));
-    registry.Register(new GrokBotConfiguration(environmentPrefix));
-    registry.Register(new ClaudeBotConfiguration(environmentPrefix)); // ← Add here
+    var registry = new BotRegistry(messagePrefix);
+    registry.Register(new GeminiBotConfiguration());
+    registry.Register(new GrokBotConfiguration());
+    registry.Register(new ClaudeBotConfiguration()); // ← Add here
     return registry;
 });
 ```
@@ -86,7 +79,8 @@ dotnet user-secrets set "ClaudeKey" "your-api-key-here"
 ```
 
 That's it! The new bot will automatically:
-- Respond to `claude <message>` (or `test-claude` in dev mode)
+- Respond to `claude <message>` in normal mode
+- Respond to `test-claude <message>` in Development mode
 - Use the specified settings and capabilities
 - Support all features enabled in the configuration
 

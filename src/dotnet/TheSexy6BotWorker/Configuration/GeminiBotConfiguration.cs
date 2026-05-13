@@ -6,14 +6,7 @@ namespace TheSexy6BotWorker.Configuration;
 
 public class GeminiBotConfiguration : IBotConfiguration
 {
-    private readonly string _environmentPrefix;
-
-    public GeminiBotConfiguration(string environmentPrefix = "")
-    {
-        _environmentPrefix = environmentPrefix;
-    }
-
-    public string Prefix => $"{_environmentPrefix}gemini";
+    public string Prefix => "gemini";
     
     public string ServiceId => "gemini";
     

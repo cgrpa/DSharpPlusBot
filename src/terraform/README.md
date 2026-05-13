@@ -37,6 +37,12 @@
 
 Use `scripts/upsert-required-secrets.sh` to set all required secrets in Key Vault.
 
+Get the target vault name from Terraform output:
+
+```bash
+terraform output -raw key_vault_name
+```
+
 Example:
 
 ```bash
@@ -74,5 +80,4 @@ for REVISION in $(az containerapp revision list \
     --revision "$REVISION"
 done
 ```
-
 
