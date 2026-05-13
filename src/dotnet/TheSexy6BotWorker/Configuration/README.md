@@ -10,6 +10,11 @@ The bot system uses a **Registry + Strategy Pattern** to support multiple AI mod
 - Execution settings (mutable for runtime changes)
 - Capabilities (reply chains, function calling, images)
 
+## Semantic Kernel Package Baseline
+
+- Core Semantic Kernel packages should track the current stable family.
+- `Microsoft.SemanticKernel.Connectors.Google` is an intentional alpha exception because a stable Google connector channel is not currently available.
+
 ## Adding a New Bot
 
 ### 1. Create Bot Configuration
@@ -138,3 +143,39 @@ This allows future tool calls to dynamically adjust bot behavior (temperature, m
 - Handler reduced from ~300 to ~150 lines
 - No duplicated processing logic
 - Bot-specific logic isolated
+
+## MCP Configuration (Disabled by Default)
+
+MCP rollout is controlled under the `Mcp` section. The default contract is intentionally non-breaking:
+
+- `Mcp:Enabled` defaults to `false`
+- `Mcp:StrictStartup` defaults to `false`
+
+`Mcp:Servers` is a named map of server configs. Each server supports endpoint, headers, tool allowlist, and startup placeholders:
+
+```json
+{
+  "Mcp": {
+    "Enabled": false,
+    "StrictStartup": false,
+    "Servers": {
+      "Tavily": {
+        "Endpoint": "https://mcp.tavily.com/mcp",
+        "Headers": {
+          "Authorization": "Bearer ${TavilyApiKey}"
+        },
+        "AllowedTools": [
+          "search"
+        ],
+        "Startup": {
+          "ConnectTimeoutSeconds": null,
+          "InitializeTimeoutSeconds": null,
+          "ReadyTimeoutSeconds": null
+        }
+      }
+    }
+  }
+}
+```
+
+The `${TavilyApiKey}` placeholder is interpolation syntax. Define `TavilyApiKey` in user-secrets or environment variables and keep `Mcp:Enabled=false` until rollout is ready.

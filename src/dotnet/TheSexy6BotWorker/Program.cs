@@ -19,6 +19,10 @@ namespace TheSexy6BotWorker
                 builder.Configuration.AddUserSecrets<Program>();
             }
 
+            builder.Services
+                .AddOptions<McpOptions>()
+                .Bind(builder.Configuration.GetSection(McpOptions.SectionName));
+
             if (!isSmokeTest)
             {
                 builder.Services
