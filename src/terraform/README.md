@@ -1,5 +1,36 @@
 # Terraform: Azure Key Vault Remote Secret Contract
 
+## CI/CD Bootstrap Sequence
+
+For workload identity pipeline deployments:
+
+1. Bootstrap the Azure resource group scope(s) used for deployment/state.
+2. Grant the pipeline service principal both `Contributor` and `User Access Administrator` on those resource group scope(s).
+3. Run the pipeline with `enforce_required_secret_presence = false` for the first infrastructure deploy.
+4. Populate required Key Vault secrets (`DiscordToken`, `GeminiKey`, `GrokKey`, `TavilyApiKey`).
+5. Re-run the pipeline with `enforce_required_secret_presence = true`.
+
+Why `User Access Administrator`: this module creates RBAC role assignments (`azurerm_role_assignment`), which requires permission to assign roles.
+
+Example RBAC grants for a pipeline service principal:
+
+```bash
+SCOPE="/subscriptions/<subscription-id>/resourceGroups/<bootstrap-or-target-rg>"
+SP_OBJECT_ID="<service-principal-object-id>"
+
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Contributor" \
+  --scope "$SCOPE"
+
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "User Access Administrator" \
+  --scope "$SCOPE"
+```
+
 ## Local Terraform Plan
 
 1. Set subscription context:

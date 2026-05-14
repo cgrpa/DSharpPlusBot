@@ -91,12 +91,14 @@ Grok's engagement mode personality:
 ## Prerequisites
 
 - [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [Terraform CLI](https://developer.hashicorp.com/terraform/install) (1.9+ recommended)
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
 - Discord bot token with Message Content intent enabled
 - API keys for:
   - Google AI Gemini
   - X.AI Grok
   - Tavily
-- (Optional) Docker for containerized deployment
+- (Optional) Docker with BuildKit/Buildx for containerized deployment
 
 ## Setup Instructions
 
@@ -104,7 +106,7 @@ Grok's engagement mode personality:
 
 ```bash
 git clone <repository-url>
-cd DSharpPlusBot
+cd TheSexy6BotWorker
 ```
 
 ### 2. Configure User Secrets
@@ -142,6 +144,100 @@ dotnet user-secrets --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csp
 ```bash
 dotnet restore TheSexy6BotWorker.slnx
 ```
+
+## Terraform Setup (Azure Infrastructure)
+
+Terraform lives in `src/terraform` and provisions the Azure Resource Group, Storage Account, Container Registry, Key Vault, Log Analytics Workspace, and Container App.
+
+### CI/CD Bootstrap Flow (Recommended)
+
+This is the expected deployment sequence for workload identity + GitHub Actions:
+
+1. Bootstrap the required Azure resource group scope(s) used by your pipeline identity.
+2. Grant the pipeline service principal both `Contributor` and `User Access Administrator` on those resource group scope(s) so Terraform can create infra and RBAC assignments.
+3. Run the pipeline once with `enforce_required_secret_presence = false` to create infrastructure before Key Vault secrets exist.
+4. Populate required Key Vault secrets.
+5. Re-run the pipeline with strict mode enabled (`enforce_required_secret_presence = true`) so deploy succeeds only when required secrets are present/enabled.
+
+`User Access Administrator` is required because this Terraform module creates `azurerm_role_assignment` resources.
+
+Example role grants for a pipeline service principal:
+
+```bash
+SCOPE="/subscriptions/<subscription-id>/resourceGroups/<bootstrap-or-target-rg>"
+SP_OBJECT_ID="<service-principal-object-id>"
+
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Contributor" \
+  --scope "$SCOPE"
+
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "User Access Administrator" \
+  --scope "$SCOPE"
+```
+
+### 1. Authenticate to Azure (Local)
+
+```bash
+az login
+az account set --subscription "<your-subscription-id>"
+export ARM_SUBSCRIPTION_ID="<your-subscription-id>"
+```
+
+### 2. Initialize Terraform (Local Backend)
+
+```bash
+terraform -chdir=src/terraform init -backend-config=local.tfbackend
+```
+
+### 3. First Pipeline Deploy Bootstrap (Strict Secret Checks Off)
+
+The module enforces required Key Vault secrets by default. If this is a brand-new environment, temporarily enable bootstrap mode in `src/terraform/terraform.tfvars`:
+
+```hcl
+enforce_required_secret_presence = false
+```
+
+Then run the deployment pipeline once to create infrastructure:
+
+- `ci-cd.yml` on `main`, or
+- `workflow_dispatch` with the Terraform reusable workflow
+
+```bash
+# local equivalent (if you need to reproduce outside CI):
+terraform -chdir=src/terraform apply
+```
+
+### 4. Seed Required Secrets in Key Vault
+
+The required secret keys are: `DiscordToken`, `GeminiKey`, `GrokKey`, `TavilyApiKey`.
+
+```bash
+KEY_VAULT_NAME="$(terraform -chdir=src/terraform output -raw key_vault_name)"
+
+KEY_VAULT_NAME="$KEY_VAULT_NAME" \
+DISCORD_TOKEN="your-discord-token" \
+GEMINI_KEY="your-gemini-key" \
+GROK_KEY="your-grok-key" \
+TAVILY_API_KEY="your-tavily-api-key" \
+./src/terraform/scripts/upsert-required-secrets.sh --non-interactive
+```
+
+### 5. Re-enable Strict Secret Checks and Re-deploy
+
+Set `enforce_required_secret_presence = true` (or remove the override), then re-run the deployment pipeline. Local equivalent:
+
+```bash
+terraform -chdir=src/terraform plan
+terraform -chdir=src/terraform apply
+terraform -chdir=src/terraform output
+```
+
+For additional secret-rotation runbook details, see `src/terraform/README.md`.
 
 ## Running Locally
 
@@ -250,41 +346,55 @@ dotnet test --filter "FullyQualifiedName~TavilyApiIntegrationTests"
 
 `TavilyApiIntegrationTests` also accepts `TavilyApiKey` from user secrets and `TAVILY_API_ENDPOINT` to override the default endpoint (`https://api.tavily.com`).
 
-## Docker Build and Deployment
+## Docker Setup and Deployment
 
-### Local Docker Build
+### 1. Build the Image
 
 ```bash
-docker build -t thesexy6bot:latest .
+docker build \
+  --build-arg GIT_SHA="$(git rev-parse --short HEAD)" \
+  --build-arg GIT_COMMIT_MSG="local" \
+  -t thesexy6bot:latest .
 ```
 
-### Run Docker Container
+### 2. Run Container Smoke Test
 
 ```bash
-docker run -e DiscordToken="your-token" \
-           -e GeminiKey="your-key" \
-           -e GrokKey="your-key" \
-           -e TavilyApiKey="your-key" \
-           thesexy6bot:latest
+docker run --rm thesexy6bot:latest --smoke-test
 ```
 
-### Build and Push to Azure Container Registry
+### 3. Run the Bot Container Locally
 
 ```bash
-# Login to Azure Container Registry
-az acr login --name thesexy6botregistry
+docker run --rm \
+  -e DiscordToken="your-discord-token" \
+  -e GeminiKey="your-gemini-key" \
+  -e GrokKey="your-grok-key" \
+  -e TavilyApiKey="your-tavily-api-key" \
+  thesexy6bot:latest
+```
 
-# Build and push
+### 4. Push to Azure Container Registry
+
+Get registry values from Terraform outputs:
+
+```bash
+ACR_LOGIN_SERVER="$(terraform -chdir=src/terraform output -raw container_registry_login_server)"
+ACR_NAME="${ACR_LOGIN_SERVER%%.azurecr.io}"
+IMAGE_TAG="$(git rev-parse --short HEAD)"
+
+az acr login --name "$ACR_NAME"
+
 docker buildx build --platform linux/amd64 \
-  -t thesexy6botregistry.azurecr.io/thesexy6bot:v1.0.0 \
-  -t thesexy6botregistry.azurecr.io/thesexy6bot:latest \
+  -t "${ACR_LOGIN_SERVER}/discordbot:${IMAGE_TAG}" \
+  -t "${ACR_LOGIN_SERVER}/discordbot:latest" \
   --push .
 ```
 
 ## Project Structure
 
 ```
-DSharpPlusBot/
+TheSexy6BotWorker/
 ├── src/
 │   ├── dotnet/
 │   │   ├── TheSexy6BotWorker/       # Main worker project
@@ -364,12 +474,12 @@ var md = new ObjectMarkdownBuilder<Config>(config)
 
 ### Docker Build Issues
 - Ensure you're using .NET 9.0 SDK
-- For ACR push: `az acr login --name thesexy6botregistry`
+- For ACR push, derive the registry name from Terraform output: `ACR_LOGIN_SERVER="$(terraform -chdir=src/terraform output -raw container_registry_login_server)"; az acr login --name "${ACR_LOGIN_SERVER%%.azurecr.io}"`
 
 ## License
 
-[Your License Here]
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Contributing
 
-[Your Contributing Guidelines Here]
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and pull request guidelines.
