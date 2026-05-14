@@ -80,6 +80,21 @@ namespace TheSexy6BotWorker
                 services
                     .AddOptions<TavilyApiOptions>()
                     .Bind(_configuration.GetSection(TavilyApiOptions.SectionName));
+                services
+                    .AddOptions<ImageGenerationOptions>()
+                    .Bind(_configuration.GetSection(ImageGenerationOptions.SectionName))
+                    .PostConfigure(options =>
+                    {
+                        if (string.IsNullOrWhiteSpace(options.OpenRouterApiKey))
+                        {
+                            options.OpenRouterApiKey = _configuration["OpenRouterApiKey"];
+                        }
+
+                        if (string.IsNullOrWhiteSpace(options.StorageAccountName))
+                        {
+                            options.StorageAccountName = _configuration["ImageStorageAccountName"];
+                        }
+                    });
                 services.AddHttpClient("TavilyApiClient", (sp, client) =>
                 {
                     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TavilyApiOptions>>().Value;
@@ -101,6 +116,12 @@ namespace TheSexy6BotWorker
                     var logger = sp.GetRequiredService<ILogger<TavilyApiService>>();
                     return new TavilyApiService(client, _configuration, options, logger);
                 });
+                services.AddHttpClient<OpenRouterImageClient>();
+                services.AddSingleton<ImageGenerationContextAccessor>();
+                services.AddSingleton<IImageBlobStore, AzureImageBlobStore>();
+                services.AddSingleton<IImageGenerationStore, AzureImageGenerationStore>();
+                services.AddSingleton<ImageGenerationService>();
+                services.AddSingleton<ImageGenerationPlugin>();
 
                 services
                     .AddSingleton(sp =>
@@ -121,6 +142,8 @@ namespace TheSexy6BotWorker
                         kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");
                         var tavilyApiService = sp.GetRequiredService<TavilyApiService>();
                         kernelBuilder.Plugins.AddFromObject(tavilyApiService, "TavilyApi");
+                        var imageGenerationPlugin = sp.GetRequiredService<ImageGenerationPlugin>();
+                        kernelBuilder.Plugins.AddFromObject(imageGenerationPlugin, "ImageGeneration");
 
                         return kernelBuilder.Build();
                     });
@@ -138,7 +161,7 @@ namespace TheSexy6BotWorker
 
             builder.UseCommands((IServiceProvider serviceProvider, CommandsExtension extension) =>
             {
-                extension.AddCommands([typeof(PingCommand), typeof(ToolsCommand)]);
+                extension.AddCommands([typeof(PingCommand), typeof(ToolsCommand), typeof(ImageCommand)]);
                 TextCommandProcessor textCommandProcessor = new(new()
                 {
                     PrefixResolver = new DefaultPrefixResolver(true, "/").ResolvePrefixAsync,

@@ -15,18 +15,20 @@
   - `DiscordToken`
   - `GeminiKey`
   - `GrokKey`
+  - `OpenRouterApiKey`
   - `TavilyApiKey`
 - Terraform maps those keys to Container App secret aliases:
   - `DiscordToken -> discord-token`
   - `GeminiKey -> gemini-key`
   - `GrokKey -> grok-key`
+  - `OpenRouterApiKey -> openrouter-api-key`
   - `TavilyApiKey -> tavily-api-key`
 - Remote runtime uses Key Vault references only (no secret values in Terraform config/state).
 
 ## Enforcement Controls
 
 - `required_secret_names`:
-  - Defaults to the four runtime keys above.
+  - Defaults to the five runtime keys above.
   - Must exactly match the alias-map keys (parity check enforced by precondition).
 - `enforce_required_secret_presence`:
   - Defaults to `true`.
@@ -36,6 +38,15 @@
 ## Bootstrap / Rotation Script
 
 Use `scripts/upsert-required-secrets.sh` to set all required secrets in Key Vault.
+
+The script reads values from environment variables, so a common local flow is to load `scripts/.env` first and then run it in non-interactive mode:
+
+```bash
+set -a
+source ./scripts/.env
+set +a
+./scripts/upsert-required-secrets.sh --non-interactive
+```
 
 Get the target vault name from Terraform output:
 
@@ -50,17 +61,19 @@ KEY_VAULT_NAME="stg-uks-discordbot-kv" \
 DISCORD_TOKEN="..." \
 GEMINI_KEY="..." \
 GROK_KEY="..." \
+OPENROUTER_API_KEY="..." \
 TAVILY_API_KEY="..." \
 ./scripts/upsert-required-secrets.sh
 ```
 
 Notes:
 
+- If you keep the values in `scripts/.env`, use `set -a` before `source` so the variables are exported to the script.
 - The script defaults to all-or-nothing updates.
 - Missing values are prompted securely when interactive.
 - Use `--non-interactive` in CI/automation.
 - Use `--allow-partial` only for explicit recovery workflows.
-- Human operator step: provision/populate `TavilyApiKey` in the target Key Vault before applying Terraform in strict mode.
+- Human operator step: provision/populate `OpenRouterApiKey` and `TavilyApiKey` in the target Key Vault before applying Terraform in strict mode.
 
 ## Post-Rotation Refresh (Deterministic)
 

@@ -1,3 +1,4 @@
+using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
 namespace TheSexy6BotWorker.Helpers
@@ -6,11 +7,22 @@ namespace TheSexy6BotWorker.Helpers
     {
         private const int MaxLength = 1980;
 
-        public static async Task SendChunkedAsync(MessageCreatedEventArgs e, string content)
+        public static async Task SendChunkedAsync(
+            MessageCreatedEventArgs e,
+            string content,
+            DiscordEmbed? embed = null)
         {
             if (content.Length <= MaxLength)
             {
-                await e.Message.RespondAsync(content);
+                if (embed is null)
+                {
+                    await e.Message.RespondAsync(content);
+                }
+                else
+                {
+                    await e.Message.RespondAsync(content, embed);
+                }
+
                 return;
             }
 
@@ -39,7 +51,21 @@ namespace TheSexy6BotWorker.Helpers
 
                 var prefix = first ? "" : "⤴️ ";
                 var suffix = isLast ? "" : " ⤵️";
-                await e.Message.RespondAsync($"{prefix}{chunk}{suffix}");
+                if (first)
+                {
+                    if (embed is null)
+                    {
+                        await e.Message.RespondAsync($"{prefix}{chunk}{suffix}");
+                    }
+                    else
+                    {
+                        await e.Message.RespondAsync($"{prefix}{chunk}{suffix}", embed);
+                    }
+                }
+                else
+                {
+                    await e.Message.RespondAsync($"{prefix}{chunk}{suffix}");
+                }
                 first = false;
             }
         }

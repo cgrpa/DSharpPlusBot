@@ -38,7 +38,7 @@ public class BotRegistry
     /// <returns>True if a matching bot was found</returns>
     public bool TryGetBot(string messageContent, out IBotConfiguration? bot, out string strippedMessage)
     {
-        Guard.Against.NullOrWhiteSpace(messageContent, nameof(messageContent));
+        
 
         bot = null;
         strippedMessage = messageContent;
