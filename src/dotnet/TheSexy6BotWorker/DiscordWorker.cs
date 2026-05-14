@@ -7,9 +7,7 @@ using DSharpPlus.Entities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TheSexy6BotWorker.Commands;
@@ -21,17 +19,14 @@ namespace TheSexy6BotWorker
 {
     public class DiscordWorker : BackgroundService
     {
-        private readonly ILogger<DiscordWorker> _logger;
         private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _hostEnvironment;
         private DiscordClient _client;
 
         public DiscordWorker(
-            ILogger<DiscordWorker> logger,
             IConfiguration configuration,
             IHostEnvironment hostEnvironment)
         {
-            _logger = logger;
             _configuration = configuration;
             _hostEnvironment = hostEnvironment;
         }
@@ -47,6 +42,9 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
+                // DSharpPlus uses its own service collection; mirror host-level config dependencies here.
+                services.AddSingleton(_configuration);
+
                 // Determine environment prefix for bot commands
                 var messagePrefix = HostEnvironmentMode.GetMessagePrefix(_hostEnvironment);
 
@@ -64,14 +62,6 @@ namespace TheSexy6BotWorker
                     return registry;
                 });
 
-                services.AddHttpClient<PerplexitySearchService>(client =>
-                {
-                    client.BaseAddress = new Uri("https://api.perplexity.ai");
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer", Guard.Against.NullOrEmpty(_configuration["PerplexityApiKey"], "PerplexityApiKey")
-                    );
-                });
-
                 // Add WeatherService with two HttpClients for OpenMeteo APIs
                 services.AddHttpClient("WeatherClient", client =>
                 {
@@ -86,6 +76,30 @@ namespace TheSexy6BotWorker
                     var weatherClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WeatherClient");
                     var geocodingClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeocodingClient");
                     return new WeatherService(weatherClient, geocodingClient);
+                });
+                services
+                    .AddOptions<TavilyApiOptions>()
+                    .Bind(_configuration.GetSection(TavilyApiOptions.SectionName));
+                services.AddHttpClient("TavilyApiClient", (sp, client) =>
+                {
+                    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TavilyApiOptions>>().Value;
+                    var endpoint = string.IsNullOrWhiteSpace(options.Endpoint)
+                        ? TavilyApiOptions.DefaultEndpoint
+                        : options.Endpoint.Trim();
+                    if (!endpoint.EndsWith("/", StringComparison.Ordinal))
+                    {
+                        endpoint += "/";
+                    }
+
+                    client.BaseAddress = new Uri(endpoint, UriKind.Absolute);
+                    client.Timeout = TimeSpan.FromSeconds(Math.Max(5, options.TimeoutSeconds));
+                });
+                services.AddTransient<TavilyApiService>(sp =>
+                {
+                    var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("TavilyApiClient");
+                    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TavilyApiOptions>>();
+                    var logger = sp.GetRequiredService<ILogger<TavilyApiService>>();
+                    return new TavilyApiService(client, _configuration, options, logger);
                 });
 
                 services
@@ -103,11 +117,10 @@ namespace TheSexy6BotWorker
                             endpoint: new Uri("https://api.x.ai/v1/"),
                             serviceId: "grok");
 
-                        var perplexityService = sp.GetRequiredService<PerplexitySearchService>();
-                        kernelBuilder.Plugins.AddFromObject(perplexityService, "PerplexitySearchService");
-
                         var weatherService = sp.GetRequiredService<WeatherService>();
                         kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");
+                        var tavilyApiService = sp.GetRequiredService<TavilyApiService>();
+                        kernelBuilder.Plugins.AddFromObject(tavilyApiService, "TavilyApi");
 
                         return kernelBuilder.Build();
                     });
@@ -125,7 +138,7 @@ namespace TheSexy6BotWorker
 
             builder.UseCommands((IServiceProvider serviceProvider, CommandsExtension extension) =>
             {
-                extension.AddCommands([typeof(PingCommand)]);
+                extension.AddCommands([typeof(PingCommand), typeof(ToolsCommand)]);
                 TextCommandProcessor textCommandProcessor = new(new()
                 {
                     PrefixResolver = new DefaultPrefixResolver(true, "/").ResolvePrefixAsync,

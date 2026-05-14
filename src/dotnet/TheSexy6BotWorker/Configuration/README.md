@@ -10,6 +10,11 @@ The bot system uses a **Registry + Strategy Pattern** to support multiple AI mod
 - Execution settings (mutable for runtime changes)
 - Capabilities (reply chains, function calling, images)
 
+## Semantic Kernel Package Baseline
+
+- Core Semantic Kernel packages should track the current stable family.
+- `Microsoft.SemanticKernel.Connectors.Google` is an intentional alpha exception because a stable Google connector channel is not currently available.
+
 ## Adding a New Bot
 
 ### 1. Create Bot Configuration
@@ -138,3 +143,30 @@ This allows future tool calls to dynamically adjust bot behavior (temperature, m
 - Handler reduced from ~300 to ~150 lines
 - No duplicated processing logic
 - Bot-specific logic isolated
+
+## Tavily API Configuration
+
+Tavily tools are wired directly as Semantic Kernel plugin functions through `TavilyApiService` (`tavily_search`, `tavily_extract`, `tavily_crawl`, `tavily_map`).
+
+Runtime configuration is under `TavilyApi`:
+
+```json
+{
+  "TavilyApi": {
+    "Endpoint": "https://api.tavily.com",
+    "TimeoutSeconds": 30,
+    "MaxRetries": 2,
+    "BaseDelayMilliseconds": 250,
+    "MaxDelayMilliseconds": 4000
+  }
+}
+```
+
+Contracts:
+
+- Authentication uses project API key `TavilyApiKey` from user secrets or environment variables.
+- Success responses return raw Tavily JSON.
+- Failures return structured JSON payloads from the tool (no thrown exception path to the model).
+- Retry policy is bounded exponential backoff + jitter for transient failures (HTTP `429`, `5xx`, and transport/network failures).
+- Non-retryable `4xx` responses return structured failure immediately.
+- `tavily_research` is intentionally excluded from this v1 integration.

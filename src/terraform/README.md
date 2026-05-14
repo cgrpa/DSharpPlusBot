@@ -15,12 +15,12 @@
   - `DiscordToken`
   - `GeminiKey`
   - `GrokKey`
-  - `PerplexityApiKey`
+  - `TavilyApiKey`
 - Terraform maps those keys to Container App secret aliases:
   - `DiscordToken -> discord-token`
   - `GeminiKey -> gemini-key`
   - `GrokKey -> grok-key`
-  - `PerplexityApiKey -> perplexity-api-key`
+  - `TavilyApiKey -> tavily-api-key`
 - Remote runtime uses Key Vault references only (no secret values in Terraform config/state).
 
 ## Enforcement Controls
@@ -50,7 +50,7 @@ KEY_VAULT_NAME="stg-uks-discordbot-kv" \
 DISCORD_TOKEN="..." \
 GEMINI_KEY="..." \
 GROK_KEY="..." \
-PERPLEXITY_API_KEY="..." \
+TAVILY_API_KEY="..." \
 ./scripts/upsert-required-secrets.sh
 ```
 
@@ -60,6 +60,7 @@ Notes:
 - Missing values are prompted securely when interactive.
 - Use `--non-interactive` in CI/automation.
 - Use `--allow-partial` only for explicit recovery workflows.
+- Human operator step: provision/populate `TavilyApiKey` in the target Key Vault before applying Terraform in strict mode.
 
 ## Post-Rotation Refresh (Deterministic)
 
@@ -80,4 +81,3 @@ for REVISION in $(az containerapp revision list \
     --revision "$REVISION"
 done
 ```
-

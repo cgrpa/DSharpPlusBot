@@ -21,7 +21,7 @@ variable "environment" {
 variable "required_secret_names" {
   type        = list(string)
   description = "Required runtime secret keys expected in Key Vault and mapped into the Container App."
-  default     = ["DiscordToken", "GeminiKey", "GrokKey", "PerplexityApiKey"]
+  default     = ["DiscordToken", "GeminiKey", "GrokKey", "TavilyApiKey"]
 
   validation {
     condition     = length(var.required_secret_names) > 0

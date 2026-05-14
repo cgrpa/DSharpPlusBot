@@ -1,11 +1,13 @@
 using DSharpPlus;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Entities;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Ardalis.GuardClauses;
 using System.Text;
 using System.Text.Json;
+using System.Linq;
 using TheSexy6BotWorker.Configuration;
 using TheSexy6BotWorker.Contracts;
 using TheSexy6BotWorker.Helpers;
@@ -22,6 +24,8 @@ namespace TheSexy6BotWorker.Handlers
         private readonly IConversationSessionManager _sessionManager;
 
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+        private const int ManualContinuationMaxTurns = 3;
+        private static readonly TimeSpan TypingKeepAliveInterval = TimeSpan.FromSeconds(8);
         private static readonly string AppVersion =
             $"{Environment.GetEnvironmentVariable("APP_VERSION") ?? "local"} — \"{Environment.GetEnvironmentVariable("APP_COMMIT_MSG") ?? "unknown"}\"";
 
@@ -73,92 +77,189 @@ namespace TheSexy6BotWorker.Handlers
 
         private async Task ProcessEngagementBotMessageAsync(MessageCreatedEventArgs e, IBotConfiguration bot, ConversationSession session)
         {
-            try
+            await RunWithTypingIndicatorAsync(e.Channel, async () =>
             {
-                var chatService = _kernel.GetRequiredService<IChatCompletionService>(serviceKey: bot.ServiceId);
-                var chatHistory = BuildChatHistory(bot, session);
-                var currentMessage = DiscordMessageFormatter.FormatWithUsername(e.Message);
-
-                if (bot.SupportsImages)
-                    await DiscordMessageFormatter.AddImagesToHistoryAsync(chatHistory, e.Message);
-
-                if (bot.SupportsFunctionCalling)
+                try
                 {
+                    var chatService = _kernel.GetRequiredService<IChatCompletionService>(serviceKey: bot.ServiceId);
+                    var chatHistory = BuildChatHistory(bot, session);
+                    var currentMessage = DiscordMessageFormatter.FormatWithUsername(e.Message);
+
+                    if (bot.SupportsImages)
+                        await DiscordMessageFormatter.AddImagesToHistoryAsync(chatHistory, e.Message);
+
+                    if (bot.SupportsFunctionCalling)
+                    {
+                        chatHistory.AddUserMessage(
+                            $"[NEW MESSAGE IN CHANNEL]\n{currentMessage}\n\n" +
+                            "[INSTRUCTION] Do NOT respond to this message yet. " +
+                            "If you need to look something up (search, weather, etc.) to inform your decision, do that now. " +
+                            "Otherwise, just acknowledge with 'Ready to decide.'");
+
+                        var toolResponseSettings = new OpenAIPromptExecutionSettings
+                        {
+                            MaxTokens = 256,
+                            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+                        };
+                        var toolResponse = await GetChatMessageWithManualFallbackAsync(chatService, chatHistory, toolResponseSettings);
+
+                        if (!string.IsNullOrWhiteSpace(toolResponse.Content))
+                            chatHistory.AddAssistantMessage(toolResponse.Content);
+                    }
+                    else
+                    {
+                        chatHistory.AddUserMessage($"[NEW MESSAGE IN CHANNEL]\n{currentMessage}");
+                    }
+
                     chatHistory.AddUserMessage(
-                        $"[NEW MESSAGE IN CHANNEL]\n{currentMessage}\n\n" +
-                        "[INSTRUCTION] Do NOT respond to this message yet. " +
-                        "If you need to look something up (search, weather, etc.) to inform your decision, do that now. " +
-                        "Otherwise, just acknowledge with 'Ready to decide.'");
+                        "Now decide: Do you want to respond to this message? " +
+                        "Consider if you have something valuable, funny, or interesting to add. " +
+                        "Return JSON with 'shouldRespond' (boolean) and 'message' (your response text if shouldRespond is true).");
 
-                    var toolResponse = await chatService.GetChatMessageContentAsync(chatHistory, kernel: _kernel,
-                        executionSettings: new OpenAIPromptExecutionSettings { MaxTokens = 256, FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() });
+                    var decisionSettings = new OpenAIPromptExecutionSettings
+                    {
+                        MaxTokens = 4096,
+                        ResponseFormat = typeof(EngagementDecision)
+                    };
+                    var response = await GetChatMessageWithManualFallbackAsync(chatService, chatHistory, decisionSettings);
 
-                    if (!string.IsNullOrEmpty(toolResponse.Content))
-                        chatHistory.AddAssistantMessage(toolResponse.Content);
+                    var decision = JsonSerializer.Deserialize<EngagementDecision>(response.Content ?? "{}", JsonOptions);
+
+                    if (decision?.ShouldRespond == true && !string.IsNullOrWhiteSpace(decision.Message))
+                    {
+                        session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, decision.Message));
+                        await DiscordMessageSender.SendChunkedAsync(e, decision.Message);
+                        await _statusService.RecordInteraction(e.Message.Content, decision.Message);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    chatHistory.AddUserMessage($"[NEW MESSAGE IN CHANNEL]\n{currentMessage}");
+                    Console.WriteLine($"Engagement mode error: {ex.Message}");
                 }
-
-                chatHistory.AddUserMessage(
-                    "Now decide: Do you want to respond to this message? " +
-                    "Consider if you have something valuable, funny, or interesting to add. " +
-                    "Return JSON with 'shouldRespond' (boolean) and 'message' (your response text if shouldRespond is true).");
-
-                var response = await chatService.GetChatMessageContentAsync(chatHistory, kernel: _kernel,
-                    executionSettings: new OpenAIPromptExecutionSettings { MaxTokens = 4096, ResponseFormat = typeof(EngagementDecision) });
-
-                var decision = JsonSerializer.Deserialize<EngagementDecision>(response.Content ?? "{}", JsonOptions);
-
-                if (decision?.ShouldRespond == true && !string.IsNullOrWhiteSpace(decision.Message))
-                {
-                    await e.Channel.TriggerTypingAsync();
-                    session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, decision.Message));
-                    await DiscordMessageSender.SendChunkedAsync(e, decision.Message);
-                    await _statusService.RecordInteraction(e.Message.Content, decision.Message);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Engagement mode error: {ex.Message}");
-            }
+            });
         }
 
         private async Task ProcessBotMessageAsync(MessageCreatedEventArgs e, IBotConfiguration bot, string userMessage, ConversationSession? session)
         {
-            await e.Channel.TriggerTypingAsync();
+            await RunWithTypingIndicatorAsync(e.Channel, async () =>
+            {
+                try
+                {
+                    var chatService = _kernel.GetRequiredService<IChatCompletionService>(serviceKey: bot.ServiceId);
+                    var chatHistory = BuildChatHistory(bot, session);
+
+                    if (session == null && bot.SupportsReplyChains && e.Message.ReferencedMessage != null)
+                        await DiscordReplyChainHelper.AddToHistoryAsync(chatHistory, e.Message, bot);
+
+                    var currentMessage = DiscordMessageFormatter.FormatWithUsername(e.Message);
+                    chatHistory.AddUserMessage(currentMessage);
+
+                    if (bot.SupportsImages)
+                        await DiscordMessageFormatter.AddImagesToHistoryAsync(chatHistory, e.Message);
+
+                    var response = await GetChatMessageWithManualFallbackAsync(chatService, chatHistory, bot.Settings);
+                    var responseContent = response.Content ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(responseContent))
+                        throw new InvalidOperationException("The model did not return a final text response after tool execution.");
+
+                    if (session != null)
+                    {
+                        session.RecordMessage(new ChatMessageContent(AuthorRole.User, currentMessage));
+                        session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, responseContent));
+                    }
+
+                    await DiscordMessageSender.SendChunkedAsync(e, responseContent);
+
+                    if (bot.SupportsFunctionCalling)
+                        await _statusService.RecordInteraction(e.Message.Content, responseContent);
+                }
+                catch (Exception ex)
+                {
+                    await e.Message.RespondAsync($"❌ Error: {ex.Message}");
+                }
+            });
+        }
+
+        private async Task RunWithTypingIndicatorAsync(DiscordChannel channel, Func<Task> action)
+        {
+            using var keepAliveCts = new CancellationTokenSource();
+            var typingTask = KeepTypingIndicatorAliveAsync(channel, keepAliveCts.Token);
+
             try
             {
-                var chatService = _kernel.GetRequiredService<IChatCompletionService>(serviceKey: bot.ServiceId);
-                var chatHistory = BuildChatHistory(bot, session);
-
-                if (session == null && bot.SupportsReplyChains && e.Message.ReferencedMessage != null)
-                    await DiscordReplyChainHelper.AddToHistoryAsync(chatHistory, e.Message, bot);
-
-                var currentMessage = DiscordMessageFormatter.FormatWithUsername(e.Message);
-                chatHistory.AddUserMessage(currentMessage);
-
-                if (bot.SupportsImages)
-                    await DiscordMessageFormatter.AddImagesToHistoryAsync(chatHistory, e.Message);
-
-                var response = await chatService.GetChatMessageContentAsync(chatHistory, kernel: _kernel, executionSettings: bot.Settings);
-                var responseContent = response.Content ?? string.Empty;
-
-                if (session != null)
+                await action();
+            }
+            finally
+            {
+                keepAliveCts.Cancel();
+                try
                 {
-                    session.RecordMessage(new ChatMessageContent(AuthorRole.User, currentMessage));
-                    session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, responseContent));
+                    await typingTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when we cancel typing keepalive after finishing the response.
+                }
+            }
+        }
+
+        private async Task<ChatMessageContent> GetChatMessageWithManualFallbackAsync(
+            IChatCompletionService chatService,
+            ChatHistory chatHistory,
+            PromptExecutionSettings executionSettings)
+        {
+            var response = await chatService.GetChatMessageContentAsync(
+                chatHistory,
+                executionSettings: executionSettings,
+                kernel: _kernel);
+
+            for (var turn = 0; turn < ManualContinuationMaxTurns; turn++)
+            {
+                var functionCalls = FunctionCallContent.GetFunctionCalls(response).ToList();
+                if (functionCalls.Count == 0)
+                {
+                    return response;
                 }
 
-                await DiscordMessageSender.SendChunkedAsync(e, responseContent);
+                chatHistory.Add(response);
 
-                if (bot.SupportsFunctionCalling)
-                    await _statusService.RecordInteraction(e.Message.Content, responseContent);
+                foreach (var functionCall in functionCalls)
+                {
+                    try
+                    {
+                        var functionResult = await functionCall.InvokeAsync(_kernel);
+                        chatHistory.Add(new FunctionResultContent(functionCall, functionResult).ToChatMessage());
+                    }
+                    catch (Exception ex)
+                    {
+                        chatHistory.Add(new FunctionResultContent(functionCall, $"Tool execution failed: {ex.Message}").ToChatMessage());
+                    }
+                }
+
+                response = await chatService.GetChatMessageContentAsync(
+                    chatHistory,
+                    executionSettings: executionSettings,
+                    kernel: _kernel);
             }
-            catch (Exception ex)
+
+            return response;
+        }
+
+        private static async Task KeepTypingIndicatorAliveAsync(DiscordChannel channel, CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
             {
-                await e.Message.RespondAsync($"❌ Error: {ex.Message}");
+                try
+                {
+                    await channel.TriggerTypingAsync();
+                }
+                catch
+                {
+                    // Typing indicator failures should not block response generation.
+                }
+
+                await Task.Delay(TypingKeepAliveInterval, cancellationToken);
             }
         }
 

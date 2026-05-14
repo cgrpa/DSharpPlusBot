@@ -1,4 +1,8 @@
 using TheSexy6BotWorker.Configuration;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace TheSexy6BotWorker
 {
@@ -19,12 +23,13 @@ namespace TheSexy6BotWorker
                 builder.Configuration.AddUserSecrets<Program>();
             }
 
+            ConfigureOpenTelemetry(builder);
+
             if (!isSmokeTest)
             {
                 builder.Services
                     .AddHostedService<DiscordWorker>();
             }
-
 
             using var host = builder.Build();
 
@@ -38,6 +43,36 @@ namespace TheSexy6BotWorker
             }
             host.Run();
             return 0;
+        }
+
+        private static void ConfigureOpenTelemetry(HostApplicationBuilder builder)
+        {
+            const string serviceName = "TheSexy6BotWorker";
+            var serviceVersion = Environment.GetEnvironmentVariable("APP_VERSION") ?? "local";
+
+            builder.Services
+                .AddOpenTelemetry()
+                .ConfigureResource(resource => resource
+                    .AddService(serviceName: serviceName, serviceVersion: serviceVersion)
+                    .AddAttributes(
+                    [
+                        new KeyValuePair<string, object>("deployment.environment.name", builder.Environment.EnvironmentName)
+                    ]))
+                .WithTracing(tracing => tracing
+                    .AddHttpClientInstrumentation()
+                    .AddOtlpExporter())
+                .WithMetrics(metrics => metrics
+                    .AddRuntimeInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddOtlpExporter());
+
+            builder.Logging.AddOpenTelemetry(logging =>
+            {
+                logging.IncludeFormattedMessage = true;
+                logging.IncludeScopes = true;
+                logging.ParseStateValues = true;
+                logging.AddOtlpExporter();
+            });
         }
     }
 }

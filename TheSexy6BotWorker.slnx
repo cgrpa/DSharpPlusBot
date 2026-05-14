@@ -1,4 +1,8 @@
 <Solution>
   <Folder Name="/Solution Items/" />
+  <Folder Name="/src/" />
+  <Folder Name="/src/dotnet/">
+    <Project Path="src/dotnet/TheSexy6BotWorker.Tests/TheSexy6BotWorker.Tests.csproj" />
+  </Folder>
   <Project Path="src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj" />
 </Solution>
