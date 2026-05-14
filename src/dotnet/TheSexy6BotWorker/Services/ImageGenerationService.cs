@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -11,7 +10,6 @@ namespace TheSexy6BotWorker.Services;
 public sealed class ImageGenerationService
 {
     private readonly OpenRouterImageClient _imageClient;
-    private readonly IImageBlobStore _blobStore;
     private readonly IImageGenerationStore _store;
     private readonly ImageGenerationContextAccessor _contextAccessor;
     private readonly ImageGenerationOptions _options;
@@ -19,14 +17,12 @@ public sealed class ImageGenerationService
 
     public ImageGenerationService(
         OpenRouterImageClient imageClient,
-        IImageBlobStore blobStore,
         IImageGenerationStore store,
         ImageGenerationContextAccessor contextAccessor,
         IOptions<ImageGenerationOptions> options,
         ILogger<ImageGenerationService> logger)
     {
         _imageClient = imageClient ?? throw new ArgumentNullException(nameof(imageClient));
-        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _contextAccessor = contextAccessor ?? throw new ArgumentNullException(nameof(contextAccessor));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
@@ -241,12 +237,8 @@ public sealed class ImageGenerationService
                 retryable: candidate == ImageGenerationModelChoice.Flux);
         }
 
-        var blobName = BuildBlobName(context, candidate, promptHash, providerResult.ResolvedImageSize);
-        var upload = await _blobStore.UploadAsync(
-            providerResult.ImageBytes,
-            providerResult.ContentType,
-            blobName,
-            cancellationToken).ConfigureAwait(false);
+        var contentType = string.IsNullOrWhiteSpace(providerResult.ContentType) ? "image/png" : providerResult.ContentType;
+        var fileName = BuildAttachmentFileName(context.SourceMessageId, candidate, promptHash, contentType);
 
         var usedFallback = candidate != requestedModel;
         var now = DateTimeOffset.UtcNow;
@@ -261,9 +253,9 @@ public sealed class ImageGenerationService
             requestedModel,
             candidate,
             modelId,
-            upload.BlobName,
-            upload.BlobUrl,
-            upload.ContentType,
+            fileName,
+            $"attachment://{fileName}",
+            contentType,
             now,
             displayMessage,
             usedFallback,
@@ -306,16 +298,28 @@ public sealed class ImageGenerationService
         }
     }
 
-    private static string BuildBlobName(
-        ImageGenerationExecutionContext context,
+    private static string BuildAttachmentFileName(
+        ulong sourceMessageId,
         ImageGenerationModelChoice candidate,
         string promptHash,
-        string imageSize)
+        string contentType)
     {
-        var timestamp = DateTimeOffset.UtcNow.UtcDateTime.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        var safeSize = imageSize.Replace(':', '-');
-        return $"{timestamp}/{context.SourceMessageId}/{candidate.ToAlias()}-{safeSize}-{promptHash[..Math.Min(12, promptHash.Length)]}-{suffix}.png";
+        var suffix = Guid.NewGuid().ToString("N")[..6];
+        var hash = promptHash[..Math.Min(10, promptHash.Length)];
+        var extension = ResolveFileExtension(contentType);
+        return $"{sourceMessageId}-{candidate.ToAlias()}-{hash}-{suffix}{extension}";
+    }
+
+    private static string ResolveFileExtension(string contentType)
+    {
+        return contentType.Trim().ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/jpg" => ".jpg",
+            "image/webp" => ".webp",
+            "image/gif" => ".gif",
+            _ => ".png"
+        };
     }
 
     private static List<ImageGenerationModelChoice> BuildCandidateOrder(ImageGenerationModelChoice requestedModel)

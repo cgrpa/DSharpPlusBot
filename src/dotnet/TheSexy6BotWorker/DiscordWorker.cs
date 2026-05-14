@@ -118,7 +118,6 @@ namespace TheSexy6BotWorker
                 });
                 services.AddHttpClient<OpenRouterImageClient>();
                 services.AddSingleton<ImageGenerationContextAccessor>();
-                services.AddSingleton<IImageBlobStore, AzureImageBlobStore>();
                 services.AddSingleton<IImageGenerationStore, AzureImageGenerationStore>();
                 services.AddSingleton<ImageGenerationService>();
                 services.AddSingleton<ImageGenerationPlugin>();

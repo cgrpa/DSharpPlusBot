@@ -94,10 +94,8 @@ public class OpenRouterImageClientTests
         };
         var contextAccessor = new ImageGenerationContextAccessor();
         var store = new InMemoryImageGenerationStore();
-        var blobStore = new InMemoryBlobStore();
         var service = new ImageGenerationService(
             CreateClient(httpClient),
-            blobStore,
             store,
             contextAccessor,
             Options.Create(CreateOptions()),
@@ -115,7 +113,9 @@ public class OpenRouterImageClientTests
         Assert.Equal(ImageGenerationModelChoice.Flux, result.RequestedModel);
         Assert.Equal(ImageGenerationModelChoice.Seedream, result.ResolvedModel);
         Assert.Equal("bytedance-seed/seedream-4.5", result.ModelId);
-        Assert.Equal(imageBytes, blobStore.Uploads.Single().ImageBytes);
+        Assert.Equal(imageBytes, result.ImageBytes);
+        Assert.Matches(@"^123-seedream-[a-f0-9]{10}-[a-f0-9]{6}\.png$", result.BlobName);
+        Assert.Equal($"attachment://{result.BlobName}", result.BlobUrl);
         Assert.Single(store.CompletedResults);
         Assert.Single(store.MetadataResults);
         Assert.Equal(2, handler.Requests.Count);
@@ -183,26 +183,6 @@ public class OpenRouterImageClientTests
     }
 
     private sealed record CapturedRequest(string Method, string Path, string Authorization, string Body);
-
-    private sealed class InMemoryBlobStore : IImageBlobStore
-    {
-        public List<CapturedUpload> Uploads { get; } = [];
-
-        public Task<ImageBlobUploadResult> UploadAsync(
-            byte[] imageBytes,
-            string contentType,
-            string blobName,
-            CancellationToken cancellationToken = default)
-        {
-            Uploads.Add(new CapturedUpload(imageBytes, contentType, blobName));
-            return Task.FromResult(new ImageBlobUploadResult(
-                blobName,
-                $"https://images.example/{blobName}",
-                contentType));
-        }
-    }
-
-    private sealed record CapturedUpload(byte[] ImageBytes, string ContentType, string BlobName);
 
     private sealed class InMemoryImageGenerationStore : IImageGenerationStore
     {

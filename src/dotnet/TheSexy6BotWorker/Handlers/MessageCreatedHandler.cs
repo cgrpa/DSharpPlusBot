@@ -170,7 +170,12 @@ namespace TheSexy6BotWorker.Handlers
                             session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, imageResult.HistoryMarker.ToJson()));
                         }
 
-                        await DiscordMessageSender.SendChunkedAsync(e, responseText, responseEmbed);
+                        await DiscordMessageSender.SendChunkedAsync(
+                            e,
+                            responseText,
+                            responseEmbed,
+                            imageResult?.ImageBytes,
+                            imageResult?.BlobName);
                         await _statusService.RecordInteraction(e.Message.Content, responseText);
                     }
                 }
@@ -237,7 +242,12 @@ namespace TheSexy6BotWorker.Handlers
                         }
                     }
 
-                    await DiscordMessageSender.SendChunkedAsync(e, responseContent, responseEmbed);
+                    await DiscordMessageSender.SendChunkedAsync(
+                        e,
+                        responseContent,
+                        responseEmbed,
+                        imageResult?.ImageBytes,
+                        imageResult?.BlobName);
 
                     if (bot.SupportsFunctionCalling)
                         await _statusService.RecordInteraction(e.Message.Content, responseContent);

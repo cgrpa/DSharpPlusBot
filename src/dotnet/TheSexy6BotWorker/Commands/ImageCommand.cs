@@ -1,6 +1,7 @@
 using DSharpPlus.Commands;
 using DSharpPlus.Commands.ArgumentModifiers;
 using DSharpPlus.Commands.Processors.TextCommands;
+using DSharpPlus.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -60,7 +61,21 @@ public static class ImageCommand
 
         var content = ImageResponseFormatter.BuildContent(result);
         var embed = ImageResponseFormatter.BuildEmbed(result);
-        await context.EditResponseAsync(content, embed).ConfigureAwait(false);
+        if (result.ImageBytes is not null && result.ImageBytes.Length > 0)
+        {
+            var fileName = string.IsNullOrWhiteSpace(result.BlobName) ? "generated-image.png" : result.BlobName;
+            await using var stream = new MemoryStream(result.ImageBytes, writable: false);
+            var builder = new DiscordMessageBuilder()
+                .WithContent(content)
+                .AddEmbed(embed)
+                .AddFile(fileName, stream);
+
+            await context.EditResponseAsync(builder).ConfigureAwait(false);
+        }
+        else
+        {
+            await context.EditResponseAsync(content, embed).ConfigureAwait(false);
+        }
 
         if (session is not null && result.HistoryMarker is not null)
         {

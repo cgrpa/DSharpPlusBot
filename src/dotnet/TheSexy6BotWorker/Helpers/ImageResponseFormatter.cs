@@ -25,6 +25,11 @@ public static class ImageResponseFormatter
             return content;
         }
 
+        if (!Uri.TryCreate(result.BlobUrl, UriKind.Absolute, out var blobUri) || (blobUri.Scheme != Uri.UriSchemeHttp && blobUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return content;
+        }
+
         if (content.Contains(result.BlobUrl, StringComparison.OrdinalIgnoreCase))
         {
             return content;
@@ -40,12 +45,16 @@ public static class ImageResponseFormatter
         var builder = new DiscordEmbedBuilder()
             .WithTitle(result.UsedFallback ? "Image generated with fallback" : "Image generated")
             .WithDescription(BuildDescription(result))
-            .WithImageUrl(result.BlobUrl)
             .WithColor(result.UsedFallback ? DiscordColor.Orange : DiscordColor.Blurple);
+
+        if (!string.IsNullOrWhiteSpace(result.BlobUrl))
+        {
+            builder.WithImageUrl(result.BlobUrl);
+        }
 
         if (!string.IsNullOrWhiteSpace(result.BlobName))
         {
-            builder.WithFooter($"Blob: {result.BlobName}");
+            builder.WithFooter($"File: {result.BlobName}");
         }
 
         return builder.Build();
