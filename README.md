@@ -14,7 +14,7 @@ A Discord bot built as a .NET 9.0 Worker Service that integrates multiple AI mod
   - Rate limiting during high activity (5+ messages in 15 seconds)
 - **Semantic Kernel Plugins**: 
   - Weather data via Open-Meteo API (no API key required)
-  - Web search via Perplexity API
+  - Tavily direct API tools (`tavily_search`, `tavily_extract`, `tavily_crawl`, `tavily_map`)
 - **Threaded Conversations**: Reply chain context (up to 10 messages deep)
 - **Dynamic Status**: Bot updates Discord status with witty AI-generated messages (batched, rate-limited)
 - **Local Development Mode**: Run with test command prefixes for safe testing
@@ -95,7 +95,7 @@ Grok's engagement mode personality:
 - API keys for:
   - Google AI Gemini
   - X.AI Grok
-  - Perplexity
+  - Tavily
 - (Optional) Docker for containerized deployment
 
 ## Setup Instructions
@@ -158,6 +158,7 @@ In Discord:
 - `grok <message>` - Chat with Grok AI (starts engagement session)
 - `ping` - Test bot responsiveness
 - `/ping` - DSharpPlus slash command
+- `/tools` or `/plugins` - List callable Kernel tools
 
 ### Engagement Mode Usage
 
@@ -180,6 +181,49 @@ DOTNET_ENVIRONMENT=Development dotnet run --project src/dotnet/TheSexy6BotWorker
 
 Commands become: `test-gemini`, `test-grok`, `test-ping`
 
+### OpenTelemetry + Aspire Dashboard (Standalone)
+
+The worker exports logs, traces, and metrics using OTLP (`AddOtlpExporter`).
+
+Start the Aspire Dashboard locally:
+
+```bash
+docker run --rm -it -d \
+  -p 18888:18888 \
+  -p 4317:18889 \
+  -p 4318:18890 \
+  --name aspire-dashboard \
+  mcr.microsoft.com/dotnet/aspire-dashboard:latest
+```
+
+Run the bot (it will export to OTLP defaults, including `http://localhost:4317` for gRPC):
+
+```bash
+dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
+```
+
+Open the dashboard UI at `http://localhost:18888`.
+
+Optional explicit exporter settings:
+
+```bash
+# Bash/Linux
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc \
+dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
+
+# PowerShell
+$env:OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
+$env:OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
+```
+
+Disable OTEL temporarily:
+
+```bash
+OTEL_SDK_DISABLED=true dotnet run --project src/dotnet/TheSexy6BotWorker/TheSexy6BotWorker.csproj
+```
+
 ## Testing
 
 ```bash
@@ -194,6 +238,17 @@ dotnet test --filter "FullyQualifiedName~BotConfiguration"
 dotnet test --filter "FullyQualifiedName~ConversationSession"
 dotnet test --filter "FullyQualifiedName~Markdown"
 ```
+
+Tavily integration tests are live-network and opt-in:
+
+```bash
+# Enable live Tavily API tests + provide key
+RUN_TAVILY_LIVE_TESTS=true \
+TAVILY_API_KEY=tvly-your-key \
+dotnet test --filter "FullyQualifiedName~TavilyApiIntegrationTests"
+```
+
+`TavilyApiIntegrationTests` also accepts `TavilyApiKey` from user secrets and `TAVILY_API_ENDPOINT` to override the default endpoint (`https://api.tavily.com`).
 
 ## Docker Build and Deployment
 

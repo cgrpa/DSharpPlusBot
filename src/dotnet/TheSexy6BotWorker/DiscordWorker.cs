@@ -21,17 +21,14 @@ namespace TheSexy6BotWorker
     {
         private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _hostEnvironment;
-        private readonly IMcpFeature _mcpFeature;
         private DiscordClient _client;
 
         public DiscordWorker(
             IConfiguration configuration,
-            IHostEnvironment hostEnvironment,
-            IMcpFeature mcpFeature)
+            IHostEnvironment hostEnvironment)
         {
             _configuration = configuration;
             _hostEnvironment = hostEnvironment;
-            _mcpFeature = mcpFeature ?? throw new ArgumentNullException(nameof(mcpFeature));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -77,6 +74,28 @@ namespace TheSexy6BotWorker
                     var geocodingClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeocodingClient");
                     return new WeatherService(weatherClient, geocodingClient);
                 });
+                services
+                    .AddOptions<TavilyApiOptions>()
+                    .Bind(_configuration.GetSection(TavilyApiOptions.SectionName));
+                services.AddHttpClient("TavilyApiClient", (sp, client) =>
+                {
+                    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TavilyApiOptions>>().Value;
+                    var endpoint = string.IsNullOrWhiteSpace(options.Endpoint)
+                        ? TavilyApiOptions.DefaultEndpoint
+                        : options.Endpoint.Trim();
+                    if (!endpoint.EndsWith("/", StringComparison.Ordinal))
+                    {
+                        endpoint += "/";
+                    }
+
+                    client.BaseAddress = new Uri(endpoint, UriKind.Absolute);
+                    client.Timeout = TimeSpan.FromSeconds(Math.Max(5, options.TimeoutSeconds));
+                });
+                services.AddTransient<TavilyApiService>(sp =>
+                {
+                    var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("TavilyApiClient");
+                    return ActivatorUtilities.CreateInstance<TavilyApiService>(sp, client);
+                });
 
                 services
                     .AddSingleton(sp =>
@@ -95,11 +114,8 @@ namespace TheSexy6BotWorker
 
                         var weatherService = sp.GetRequiredService<WeatherService>();
                         kernelBuilder.Plugins.AddFromObject(weatherService, "WeatherService");
-
-                        _mcpFeature
-                            .RegisterKernelPluginsAsync(kernelBuilder.Plugins, CancellationToken.None)
-                            .GetAwaiter()
-                            .GetResult();
+                        var tavilyApiService = sp.GetRequiredService<TavilyApiService>();
+                        kernelBuilder.Plugins.AddFromObject(tavilyApiService, "TavilyApi");
 
                         return kernelBuilder.Build();
                     });
@@ -117,7 +133,7 @@ namespace TheSexy6BotWorker
 
             builder.UseCommands((IServiceProvider serviceProvider, CommandsExtension extension) =>
             {
-                extension.AddCommands([typeof(PingCommand)]);
+                extension.AddCommands([typeof(PingCommand), typeof(ToolsCommand)]);
                 TextCommandProcessor textCommandProcessor = new(new()
                 {
                     PrefixResolver = new DefaultPrefixResolver(true, "/").ResolvePrefixAsync,

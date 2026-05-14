@@ -144,60 +144,29 @@ This allows future tool calls to dynamically adjust bot behavior (temperature, m
 - No duplicated processing logic
 - Bot-specific logic isolated
 
-## MCP Configuration (Disabled by Default)
+## Tavily API Configuration
 
-MCP rollout is controlled under the `Mcp` section. The default contract is intentionally non-breaking:
+Tavily tools are wired directly as Semantic Kernel plugin functions through `TavilyApiService` (`tavily_search`, `tavily_extract`, `tavily_crawl`, `tavily_map`).
 
-- `Mcp:Enabled` defaults to `false`
-- `Mcp:StrictStartup` defaults to `false`
-
-`Mcp:Servers` is a named map of server configs. Each server supports endpoint, headers, tool allowlist, and startup timeout controls:
+Runtime configuration is under `TavilyApi`:
 
 ```json
 {
-  "Mcp": {
-    "Enabled": false,
-    "StrictStartup": false,
-    "Servers": {
-      "Tavily": {
-        "Endpoint": "https://mcp.tavily.com/mcp",
-        "Headers": {
-          "Authorization": "Bearer ${TavilyApiKey}"
-        },
-        "AllowedTools": [
-          "search"
-        ],
-        "Startup": {
-          "ConnectTimeoutSeconds": null,
-          "InitializeTimeoutSeconds": null,
-          "ReadyTimeoutSeconds": null
-        }
-      }
-    }
+  "TavilyApi": {
+    "Endpoint": "https://api.tavily.com",
+    "TimeoutSeconds": 30,
+    "MaxRetries": 2,
+    "BaseDelayMilliseconds": 250,
+    "MaxDelayMilliseconds": 4000
   }
 }
 ```
 
-The `${TavilyApiKey}` placeholder is interpolation syntax. Define `TavilyApiKey` in user-secrets or environment variables and keep `Mcp:Enabled=false` until rollout is ready.
+Contracts:
 
-Interpolation and validation contract:
-
-- Placeholder resolution order is configuration first, then OS environment variable fallback.
-- If interpolation cannot resolve one or more placeholders, only that MCP server is skipped (degraded startup contract).
-- Tavily `DEFAULT_PARAMETERS` is supported via headers and must be valid JSON; malformed JSON marks only that server as skipped.
-
-Registration and discovery contract:
-
-- Server bootstrap runs in parallel across configured MCP servers.
-- Per-server startup timeout defaults to `10` seconds.
-- Per-server timeout overrides can be set via `Startup.ConnectTimeoutSeconds`, `Startup.InitializeTimeoutSeconds`, and `Startup.ReadyTimeoutSeconds`; the most restrictive non-null value is used as the startup timeout budget.
-- Transport auto-detection order is `StreamableHttp` first, then `ServerSentEvents` fallback.
-- Only `AllowedTools` are registered into the kernel plugin.
-- If any configured allowed tool is missing from discovery, that entire server is skipped (no partial registration).
-- Tavily plugin alias is fixed as `TavilyRemoteMcp`; non-Tavily aliases are deterministic (`<ServerName>RemoteMcp`).
-
-Runtime invocation contract and prompt guidance:
-
-- If an MCP tool is unavailable at runtime (server disconnected, connect failure, or tool outside the fixed allowlist), invocation returns an explicit failure message.
-- Failure text must be treated as authoritative: `This call failed and no non-MCP fallback was executed.`
-- Prompt/tool behavior should not silently substitute a different path when MCP is unavailable. The assistant should communicate the failure clearly and ask the user whether to retry or proceed without MCP-backed data.
+- Authentication uses project API key `TavilyApiKey` from user secrets or environment variables.
+- Success responses return raw Tavily JSON.
+- Failures return structured JSON payloads from the tool (no thrown exception path to the model).
+- Retry policy is bounded exponential backoff + jitter for transient failures (HTTP `429`, `5xx`, and transport/network failures).
+- Non-retryable `4xx` responses return structured failure immediately.
+- `tavily_research` is intentionally excluded from this v1 integration.
