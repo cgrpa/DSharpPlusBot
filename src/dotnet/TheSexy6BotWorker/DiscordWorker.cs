@@ -42,6 +42,9 @@ namespace TheSexy6BotWorker
 
             builder.ConfigureServices(services =>
             {
+                // DSharpPlus uses its own service collection; mirror host-level config dependencies here.
+                services.AddSingleton(_configuration);
+
                 // Determine environment prefix for bot commands
                 var messagePrefix = HostEnvironmentMode.GetMessagePrefix(_hostEnvironment);
 
@@ -94,7 +97,9 @@ namespace TheSexy6BotWorker
                 services.AddTransient<TavilyApiService>(sp =>
                 {
                     var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("TavilyApiClient");
-                    return ActivatorUtilities.CreateInstance<TavilyApiService>(sp, client);
+                    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TavilyApiOptions>>();
+                    var logger = sp.GetRequiredService<ILogger<TavilyApiService>>();
+                    return new TavilyApiService(client, _configuration, options, logger);
                 });
 
                 services

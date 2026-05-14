@@ -7,11 +7,11 @@ public sealed class TavilyApiOptions
 
     public string Endpoint { get; set; } = DefaultEndpoint;
 
-    public int TimeoutSeconds { get; set; } = 30;
+    public int TimeoutSeconds { get; set; } = 15;
 
-    public int MaxRetries { get; set; } = 2;
+    public int MaxRetries { get; set; } = 1;
 
-    public int BaseDelayMilliseconds { get; set; } = 250;
+    public int BaseDelayMilliseconds { get; set; } = 150;
 
-    public int MaxDelayMilliseconds { get; set; } = 4000;
+    public int MaxDelayMilliseconds { get; set; } = 1000;
 }
