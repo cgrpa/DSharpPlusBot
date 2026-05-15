@@ -38,7 +38,11 @@ public class BotRegistry
     /// <returns>True if a matching bot was found</returns>
     public bool TryGetBot(string messageContent, out IBotConfiguration? bot, out string strippedMessage)
     {
-        
+        ArgumentNullException.ThrowIfNull(messageContent);
+        if (string.IsNullOrWhiteSpace(messageContent))
+        {
+            throw new ArgumentException("Message content cannot be empty.", nameof(messageContent));
+        }
 
         bot = null;
         strippedMessage = messageContent;

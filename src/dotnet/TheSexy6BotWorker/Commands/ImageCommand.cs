@@ -36,6 +36,7 @@ public static class ImageCommand
                 context.Message.Id,
                 context.Channel.Id,
                 context.User.Id,
+                context.Channel.GuildId,
                 IsAuto: false));
 
         if (session is not null)

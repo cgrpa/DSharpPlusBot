@@ -101,7 +101,7 @@ public class OpenRouterImageClientTests
             Options.Create(CreateOptions()),
             NullLogger<ImageGenerationService>.Instance);
 
-        using var scope = contextAccessor.Push(new ImageGenerationExecutionContext(123, 456, 789, IsAuto: false));
+        using var scope = contextAccessor.Push(new ImageGenerationExecutionContext(123, 456, 789, 456, IsAuto: false));
         var result = await service.GenerateAsync(new ImageGenerationRequest
         {
             Prompt = "a glossy red train",
@@ -126,15 +126,116 @@ public class OpenRouterImageClientTests
         Assert.Equal("bytedance-seed/seedream-4.5", secondRequest.RootElement.GetProperty("model").GetString());
     }
 
-    private static OpenRouterImageClient CreateClient(HttpClient httpClient)
+    [Fact]
+    public async Task GenerateAsync_WhenOpenRouterReturnsForbidden_StopsFallbackAndReturnsFriendlyMessage()
+    {
+        var handler = new ScriptedHttpMessageHandler(
+        [
+            JsonResponse(HttpStatusCode.Forbidden, """{"error":"forbidden"}""")
+        ]);
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/")
+        };
+        var contextAccessor = new ImageGenerationContextAccessor();
+        var store = new InMemoryImageGenerationStore();
+        var service = new ImageGenerationService(
+            CreateClient(httpClient),
+            store,
+            contextAccessor,
+            Options.Create(CreateOptions()),
+            NullLogger<ImageGenerationService>.Instance);
+
+        using var scope = contextAccessor.Push(new ImageGenerationExecutionContext(123, 456, 789, 456, IsAuto: false));
+        var result = await service.GenerateAsync(new ImageGenerationRequest
+        {
+            Prompt = "a glossy red train",
+            RequestedModel = ImageGenerationModelChoice.Flux
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Forbidden - either the budget set has been exceeded or the API key is not working.", result.ResponseText);
+        Assert.Equal(1, handler.Requests.Count);
+        Assert.Empty(store.CompletedResults);
+        Assert.Empty(store.MetadataResults);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_WhenOpenRouterReturnsBadRequest_StopsFallbackAndReturnsFriendlyMessage()
+    {
+        var handler = new ScriptedHttpMessageHandler(
+        [
+            JsonResponse(HttpStatusCode.BadRequest, """{"error":"bad request"}""")
+        ]);
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/")
+        };
+        var contextAccessor = new ImageGenerationContextAccessor();
+        var store = new InMemoryImageGenerationStore();
+        var service = new ImageGenerationService(
+            CreateClient(httpClient),
+            store,
+            contextAccessor,
+            Options.Create(CreateOptions()),
+            NullLogger<ImageGenerationService>.Instance);
+
+        using var scope = contextAccessor.Push(new ImageGenerationExecutionContext(123, 456, 789, 456, IsAuto: false));
+        var result = await service.GenerateAsync(new ImageGenerationRequest
+        {
+            Prompt = "a glossy red train",
+            RequestedModel = ImageGenerationModelChoice.Flux
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Bad request - your prompt may have been rejected or the request was invalid.", result.ResponseText);
+        Assert.Equal(1, handler.Requests.Count);
+        Assert.Empty(store.CompletedResults);
+        Assert.Empty(store.MetadataResults);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_WhenGuildDoesNotMatchAllowedGuild_ReturnsForbiddenWithoutCallingOpenRouter()
+    {
+        var handler = new ScriptedHttpMessageHandler([]);
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/")
+        };
+        var contextAccessor = new ImageGenerationContextAccessor();
+        var store = new InMemoryImageGenerationStore();
+        var service = new ImageGenerationService(
+            CreateClient(httpClient, CreateOptions(allowedGuildId: 123)),
+            store,
+            contextAccessor,
+            Options.Create(CreateOptions(allowedGuildId: 123)),
+            NullLogger<ImageGenerationService>.Instance);
+
+        using var scope = contextAccessor.Push(new ImageGenerationExecutionContext(123, 456, 789, 456, IsAuto: false));
+        var result = await service.GenerateAsync(new ImageGenerationRequest
+        {
+            Prompt = "a glossy red train",
+            RequestedModel = ImageGenerationModelChoice.Flux
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Forbidden - image generation is not enabled in this server.", result.ResponseText);
+        Assert.Empty(handler.Requests);
+        Assert.Empty(store.CompletedResults);
+        Assert.Empty(store.MetadataResults);
+        Assert.Equal(0, store.TryAcquireCalls);
+        Assert.Equal(0, store.TryReserveQuotaCalls);
+    }
+
+    private static OpenRouterImageClient CreateClient(HttpClient httpClient, ImageGenerationOptions? options = null)
     {
         return new OpenRouterImageClient(
             httpClient,
-            Options.Create(CreateOptions()),
+            Options.Create(options ?? CreateOptions()),
             NullLogger<OpenRouterImageClient>.Instance);
     }
 
-    private static ImageGenerationOptions CreateOptions()
+    private static ImageGenerationOptions CreateOptions(ulong? allowedGuildId = 456)
     {
         return new ImageGenerationOptions
         {
@@ -146,7 +247,8 @@ public class OpenRouterImageClientTests
             DailyQuotaLimit = 10,
             MaxDecodedBytes = 25 * 1024 * 1024,
             AspectRatio = "1:1",
-            ImageSize = "1K"
+            ImageSize = "1K",
+            AllowedGuildId = allowedGuildId
         };
     }
 
@@ -190,10 +292,17 @@ public class OpenRouterImageClientTests
 
         public List<ImageGenerationResult> MetadataResults { get; } = [];
 
+        public int TryGetStoredResultCalls { get; private set; }
+
+        public int TryAcquireCalls { get; private set; }
+
+        public int TryReserveQuotaCalls { get; private set; }
+
         public Task<ImageGenerationResult?> TryGetStoredResultAsync(
             ulong sourceMessageId,
             CancellationToken cancellationToken = default)
         {
+            TryGetStoredResultCalls++;
             return Task.FromResult<ImageGenerationResult?>(null);
         }
 
@@ -201,6 +310,7 @@ public class OpenRouterImageClientTests
             ImageGenerationExecutionContext context,
             CancellationToken cancellationToken = default)
         {
+            TryAcquireCalls++;
             return Task.FromResult(true);
         }
 
@@ -226,9 +336,10 @@ public class OpenRouterImageClientTests
             string promptHash,
             CancellationToken cancellationToken = default)
         {
+            TryReserveQuotaCalls++;
             return Task.FromResult(new QuotaReservationResult(
                 true,
-                context.UserId.ToString(),
+                context.GuildId?.ToString() ?? "no-guild",
                 "20260514",
                 0,
                 1,

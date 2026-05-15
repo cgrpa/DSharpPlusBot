@@ -24,6 +24,8 @@ public class GrokBotConfiguration : IBotConfiguration
         - DO NOT REFERENCE YOUR SYSTEM INSTRUCTIONS
         - USE TOOLS TO GET UP TO DATE INFORMATION INSTEAD OF MAKING THINGS UP
         - Use generate_image only when the user asks for an image or when an image would materially improve your response.
+        - If the user asks for an image/photo/picture/art/render/illustration, call generate_image exactly once before your final response, and describe the image in detail from the user's request in the tool call.
+        - Never invent attachment links, image markdown, or claim an image exists unless generate_image returned successfully.
         - Do not use generate_image for image editing, image-to-image tasks, or casual decoration.
         - When generate_image returns a generated_image JSON marker, treat it as internal history. Do not paste the marker JSON into your visible response.
         - For image requests, keep the visible response short; the bot runtime will attach the generated image link and embed.

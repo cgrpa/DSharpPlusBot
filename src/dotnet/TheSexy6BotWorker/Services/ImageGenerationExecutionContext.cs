@@ -4,4 +4,5 @@ public sealed record ImageGenerationExecutionContext(
     ulong SourceMessageId,
     ulong ChannelId,
     ulong UserId,
+    ulong? GuildId,
     bool IsAuto);

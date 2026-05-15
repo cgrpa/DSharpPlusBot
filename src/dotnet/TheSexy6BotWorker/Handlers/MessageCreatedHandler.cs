@@ -90,6 +90,7 @@ namespace TheSexy6BotWorker.Handlers
                     e.Message.Id,
                     e.Channel.Id,
                     e.Author.Id,
+                    e.Channel.GuildId,
                     IsAuto: true));
 
             await RunWithTypingIndicatorAsync(e.Channel, async () =>
@@ -193,6 +194,7 @@ namespace TheSexy6BotWorker.Handlers
                     e.Message.Id,
                     e.Channel.Id,
                     e.Author.Id,
+                    e.Channel.GuildId,
                     IsAuto: bot.SupportsFunctionCalling));
 
             await RunWithTypingIndicatorAsync(e.Channel, async () =>

@@ -40,7 +40,7 @@ public sealed class ImageGenerationService
         {
             var failure = CreateFailureResult(
                 request,
-                "Image generation context is unavailable.",
+                "Bad request - image generation context is unavailable.",
                 isNewGeneration: true,
                 requestedModel: request.RequestedModel ?? ImageGenerationModelChoice.Flux);
             _contextAccessor.StoreLastResult(failure);
@@ -52,7 +52,7 @@ public sealed class ImageGenerationService
         {
             var failure = CreateFailureResult(
                 request,
-                "A non-empty prompt is required.",
+                "Bad request - a non-empty prompt is required.",
                 isNewGeneration: true,
                 requestedModel: request.RequestedModel ?? ImageGenerationModelChoice.Flux);
             _contextAccessor.StoreLastResult(failure);
@@ -63,7 +63,18 @@ public sealed class ImageGenerationService
         {
             var failure = CreateFailureResult(
                 request,
-                "Image generation is disabled by configuration.",
+                "Forbidden - image generation is disabled by configuration.",
+                isNewGeneration: true,
+                requestedModel: request.RequestedModel ?? ImageGenerationModelChoice.Flux);
+            _contextAccessor.StoreLastResult(failure);
+            return failure;
+        }
+
+        if (!IsGuildAllowed(context))
+        {
+            var failure = CreateFailureResult(
+                request,
+                "Forbidden - image generation is not enabled in this server.",
                 isNewGeneration: true,
                 requestedModel: request.RequestedModel ?? ImageGenerationModelChoice.Flux);
             _contextAccessor.StoreLastResult(failure);
@@ -102,18 +113,7 @@ public sealed class ImageGenerationService
                 quotaReservation.ErrorMessage ?? "Unable to reserve image quota.",
                 isNewGeneration: true,
                 createdAtUtc: DateTimeOffset.UtcNow);
-
-            try
-            {
-                await _store.MarkFailedAsync(quotaFailure, context, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Unable to mark quota failure for message {MessageId}.", context.SourceMessageId);
-            }
-
-            _contextAccessor.StoreLastResult(quotaFailure);
-            return quotaFailure;
+            return await RecordFailureAsync(quotaFailure, context, cancellationToken).ConfigureAwait(false);
         }
 
         try
@@ -145,6 +145,19 @@ public sealed class ImageGenerationService
                         "OpenRouter candidate {Candidate} failed while generating image for message {MessageId}.",
                         candidate.ToAlias(),
                         context.SourceMessageId);
+
+                    if (!ex.Retryable)
+                    {
+                        var failure = ImageGenerationResult.CreateFailure(
+                            prompt,
+                            promptHash,
+                            requestedModel,
+                            GetFriendlyProviderFailureMessage(ex),
+                            isNewGeneration: true,
+                            createdAtUtc: DateTimeOffset.UtcNow);
+
+                        return await RecordFailureAsync(failure, context, cancellationToken, quotaReservation).ConfigureAwait(false);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -158,7 +171,9 @@ public sealed class ImageGenerationService
 
             if (successfulResult is null)
             {
-                var failureMessage = lastFailure?.Message ?? "Image generation failed.";
+                var failureMessage = lastFailure is ImageGenerationProviderException providerFailure
+                    ? GetFriendlyProviderFailureMessage(providerFailure)
+                    : lastFailure?.Message ?? "Image generation failed.";
                 var failure = ImageGenerationResult.CreateFailure(
                     prompt,
                     promptHash,
@@ -167,10 +182,7 @@ public sealed class ImageGenerationService
                     isNewGeneration: true,
                     createdAtUtc: DateTimeOffset.UtcNow);
 
-                await _store.ReleaseQuotaAsync(quotaReservation, cancellationToken).ConfigureAwait(false);
-                await _store.MarkFailedAsync(failure, context, cancellationToken).ConfigureAwait(false);
-                _contextAccessor.StoreLastResult(failure);
-                return failure;
+                return await RecordFailureAsync(failure, context, cancellationToken, quotaReservation).ConfigureAwait(false);
             }
 
             await PersistCompletedResultAsync(successfulResult, context, cancellationToken).ConfigureAwait(false);
@@ -179,15 +191,6 @@ public sealed class ImageGenerationService
         }
         catch (Exception ex)
         {
-            try
-            {
-                await _store.ReleaseQuotaAsync(quotaReservation, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception releaseEx)
-            {
-                _logger.LogWarning(releaseEx, "Failed to release quota reservation after image generation failure.");
-            }
-
             var failure = ImageGenerationResult.CreateFailure(
                 prompt,
                 promptHash,
@@ -195,18 +198,7 @@ public sealed class ImageGenerationService
                 $"Image generation failed unexpectedly: {ex.Message}",
                 isNewGeneration: true,
                 createdAtUtc: DateTimeOffset.UtcNow);
-
-            try
-            {
-                await _store.MarkFailedAsync(failure, context, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception markFailureEx)
-            {
-                _logger.LogWarning(markFailureEx, "Unable to mark unexpected image generation failure for message {MessageId}.", context.SourceMessageId);
-            }
-
-            _contextAccessor.StoreLastResult(failure);
-            return failure;
+            return await RecordFailureAsync(failure, context, cancellationToken, quotaReservation).ConfigureAwait(false);
         }
     }
 
@@ -351,6 +343,69 @@ public sealed class ImageGenerationService
     {
         var candidate = string.IsNullOrWhiteSpace(imageSize) ? "1K" : imageSize.Trim();
         return candidate;
+    }
+
+    private bool IsGuildAllowed(ImageGenerationExecutionContext context)
+    {
+        return _options.AllowedGuildId.HasValue
+            && context.GuildId.HasValue
+            && _options.AllowedGuildId.Value == context.GuildId.Value;
+    }
+
+    private static string GetFriendlyProviderFailureMessage(ImageGenerationProviderException ex)
+    {
+        if (ex.StatusCode == 400)
+        {
+            return "Bad request - your prompt may have been rejected or the request was invalid.";
+        }
+
+        if (ex.StatusCode is 401 or 403)
+        {
+            return "Forbidden - either the budget set has been exceeded or the API key is not working.";
+        }
+
+        if (!ex.Retryable && ex.Message.Contains("API key", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Forbidden - either the budget set has been exceeded or the API key is not working.";
+        }
+
+        if (!ex.Retryable && ex.Message.Contains("prompt", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Bad request - your prompt may have been rejected or the request was invalid.";
+        }
+
+        return ex.Message;
+    }
+
+    private async Task<ImageGenerationResult> RecordFailureAsync(
+        ImageGenerationResult failure,
+        ImageGenerationExecutionContext context,
+        CancellationToken cancellationToken,
+        QuotaReservationResult? quotaReservation = null)
+    {
+        if (quotaReservation is { Success: true } reservedQuota)
+        {
+            try
+            {
+                await _store.ReleaseQuotaAsync(reservedQuota, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception releaseEx)
+            {
+                _logger.LogWarning(releaseEx, "Failed to release quota reservation after image generation failure.");
+            }
+        }
+
+        try
+        {
+            await _store.MarkFailedAsync(failure, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception markFailureEx)
+        {
+            _logger.LogWarning(markFailureEx, "Unable to mark image generation failure for message {MessageId}.", context.SourceMessageId);
+        }
+
+        _contextAccessor.StoreLastResult(failure);
+        return failure;
     }
 
     private static ImageGenerationResult CreateFailureResult(

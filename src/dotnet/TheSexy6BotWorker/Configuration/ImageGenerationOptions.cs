@@ -30,6 +30,8 @@ public sealed class ImageGenerationOptions
 
     public string? StorageConnectionString { get; set; }
 
+    public ulong? AllowedGuildId { get; set; }
+
     public int DailyQuotaLimit { get; set; } = 10;
 
     public int MaxDecodedBytes { get; set; } = 25 * 1024 * 1024;

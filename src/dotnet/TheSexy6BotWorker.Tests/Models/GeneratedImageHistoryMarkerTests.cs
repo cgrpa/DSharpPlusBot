@@ -21,7 +21,7 @@ public class GeneratedImageHistoryMarkerTests
             createdAt,
             "Generated an image.",
             usedFallback: true);
-        var context = new ImageGenerationExecutionContext(42, 100, 200, IsAuto: true);
+        var context = new ImageGenerationExecutionContext(42, 100, 200, 300, IsAuto: true);
 
         var marker = GeneratedImageHistoryMarker.FromResult(result, context);
         var json = marker.ToJson();

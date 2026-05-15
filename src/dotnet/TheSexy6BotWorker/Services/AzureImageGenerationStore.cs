@@ -110,7 +110,8 @@ public sealed class AzureImageGenerationStore : IImageGenerationStore
     {
         var table = await GetQuotaTableAsync(cancellationToken).ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
-        var partitionKey = context.UserId.ToString(CultureInfo.InvariantCulture);
+        var partitionKey = context.GuildId?.ToString(CultureInfo.InvariantCulture)
+            ?? throw new InvalidOperationException("Image generation quota requires a guild context.");
         var rowKey = now.UtcDateTime.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
         var resetAt = GetNextUtcMidnight(now);
 
@@ -147,7 +148,7 @@ public sealed class AzureImageGenerationStore : IImageGenerationStore
                         existing.Count,
                         _options.DailyQuotaLimit,
                         existing.ResetAtUtc,
-                        $"Daily image quota of {_options.DailyQuotaLimit} has been reached.");
+                        $"Forbidden - the daily server image budget has been exceeded.");
                 }
 
                 existing.Count++;
@@ -161,7 +162,7 @@ public sealed class AzureImageGenerationStore : IImageGenerationStore
             }
             catch (RequestFailedException ex) when (ex.Status == 412)
             {
-                _logger.LogDebug("Quota update raced for user {UserId}; retrying attempt {Attempt}.", context.UserId, attempt);
+                _logger.LogDebug("Quota update raced for guild {GuildId}; retrying attempt {Attempt}.", context.GuildId, attempt);
             }
         }
 
