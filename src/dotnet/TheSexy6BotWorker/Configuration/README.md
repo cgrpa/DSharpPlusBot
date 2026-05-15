@@ -170,3 +170,29 @@ Contracts:
 - Retry policy is bounded exponential backoff + jitter for transient failures (HTTP `429`, `5xx`, and transport/network failures).
 - Non-retryable `4xx` responses return structured failure immediately.
 - `tavily_research` is intentionally excluded from this v1 integration.
+
+## Image Generation Configuration
+
+Image generation is wired through `ImageGenerationOptions` and shared by the `/image` command and the `generate_image` tool.
+
+Runtime configuration is under `ImageGeneration`:
+
+```json
+{
+  "ImageGeneration": {
+    "AllowedGuildId": 123456789012345678,
+    "DailyQuotaLimit": 10,
+    "OpenRouterApiKey": "your-openrouter-api-key"
+  }
+}
+```
+
+Contracts:
+
+- Set `AllowedGuildId` to the Discord server that is allowed to use image generation.
+- If `AllowedGuildId` is unset, image generation stays disabled.
+- The service requires a guild context; DMs are rejected.
+- Quota is shared per guild and resets at UTC midnight.
+- `403` from OpenRouter is surfaced as `Forbidden - either the budget set has been exceeded or the API key is not working.`
+- `400` from OpenRouter is surfaced as `Bad request - your prompt may have been rejected or the request was invalid.`
+- Guild restriction failures surface as `Forbidden - image generation is not enabled in this server.`

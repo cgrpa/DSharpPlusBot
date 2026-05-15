@@ -22,6 +22,7 @@ namespace TheSexy6BotWorker.Handlers
         private readonly DynamicStatusService _statusService;
         private readonly BotRegistry _botRegistry;
         private readonly IConversationSessionManager _sessionManager;
+        private readonly ImageGenerationContextAccessor _imageGenerationContextAccessor;
 
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
         private const int ManualContinuationMaxTurns = 3;
@@ -33,12 +34,14 @@ namespace TheSexy6BotWorker.Handlers
             Kernel kernel,
             DynamicStatusService statusService,
             BotRegistry botRegistry,
-            IConversationSessionManager sessionManager)
+            IConversationSessionManager sessionManager,
+            ImageGenerationContextAccessor imageGenerationContextAccessor)
         {
             _kernel = Guard.Against.Null(kernel, nameof(kernel));
             _statusService = Guard.Against.Null(statusService, nameof(statusService));
             _botRegistry = Guard.Against.Null(botRegistry, nameof(botRegistry));
             _sessionManager = Guard.Against.Null(sessionManager, nameof(sessionManager));
+            _imageGenerationContextAccessor = Guard.Against.Null(imageGenerationContextAccessor, nameof(imageGenerationContextAccessor));
         }
 
         public async Task HandleEventAsync(DiscordClient client, MessageCreatedEventArgs e)
@@ -48,6 +51,11 @@ namespace TheSexy6BotWorker.Handlers
             if (e.Message.Content.StartsWith("ping", StringComparison.OrdinalIgnoreCase))
             {
                 await e.Message.RespondAsync("pong!");
+                return;
+            }
+
+            if (MessageRoutingRules.IsLikelyCommandMessage(e.Message.Content))
+            {
                 return;
             }
 
@@ -77,6 +85,14 @@ namespace TheSexy6BotWorker.Handlers
 
         private async Task ProcessEngagementBotMessageAsync(MessageCreatedEventArgs e, IBotConfiguration bot, ConversationSession session)
         {
+            using var imageGenerationScope = _imageGenerationContextAccessor.Push(
+                new ImageGenerationExecutionContext(
+                    e.Message.Id,
+                    e.Channel.Id,
+                    e.Author.Id,
+                    e.Channel.GuildId,
+                    IsAuto: true));
+
             await RunWithTypingIndicatorAsync(e.Channel, async () =>
             {
                 try
@@ -93,7 +109,7 @@ namespace TheSexy6BotWorker.Handlers
                         chatHistory.AddUserMessage(
                             $"[NEW MESSAGE IN CHANNEL]\n{currentMessage}\n\n" +
                             "[INSTRUCTION] Do NOT respond to this message yet. " +
-                            "If you need to look something up (search, weather, etc.) to inform your decision, do that now. " +
+                            "If you need to use a tool (search, weather, image generation, etc.) to inform your decision, do that now. " +
                             "Otherwise, just acknowledge with 'Ready to decide.'");
 
                         var toolResponseSettings = new OpenAIPromptExecutionSettings
@@ -124,12 +140,44 @@ namespace TheSexy6BotWorker.Handlers
                     var response = await GetChatMessageWithManualFallbackAsync(chatService, chatHistory, decisionSettings);
 
                     var decision = JsonSerializer.Deserialize<EngagementDecision>(response.Content ?? "{}", JsonOptions);
+                    var imageResult = _imageGenerationContextAccessor.ConsumeLastResult();
 
-                    if (decision?.ShouldRespond == true && !string.IsNullOrWhiteSpace(decision.Message))
+                    if (decision?.ShouldRespond == true)
                     {
-                        session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, decision.Message));
-                        await DiscordMessageSender.SendChunkedAsync(e, decision.Message);
-                        await _statusService.RecordInteraction(e.Message.Content, decision.Message);
+                        var responseText = decision.Message ?? string.Empty;
+                        DiscordEmbed? responseEmbed = null;
+
+                        if (imageResult?.IsNewGeneration == true)
+                        {
+                            if (imageResult.Success)
+                            {
+                                responseText = ImageResponseFormatter.BuildContent(imageResult, responseText);
+                                responseEmbed = ImageResponseFormatter.BuildEmbed(imageResult);
+                            }
+                            else if (string.IsNullOrWhiteSpace(responseText))
+                            {
+                                responseText = imageResult.ResponseText;
+                            }
+                        }
+
+                        if (string.IsNullOrWhiteSpace(responseText))
+                        {
+                            return;
+                        }
+
+                        session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, responseText));
+                        if (imageResult?.Success == true && imageResult.IsNewGeneration && imageResult.HistoryMarker is not null)
+                        {
+                            session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, imageResult.HistoryMarker.ToJson()));
+                        }
+
+                        await DiscordMessageSender.SendChunkedAsync(
+                            e,
+                            responseText,
+                            responseEmbed,
+                            imageResult?.ImageBytes,
+                            imageResult?.BlobName);
+                        await _statusService.RecordInteraction(e.Message.Content, responseText);
                     }
                 }
                 catch (Exception ex)
@@ -141,6 +189,14 @@ namespace TheSexy6BotWorker.Handlers
 
         private async Task ProcessBotMessageAsync(MessageCreatedEventArgs e, IBotConfiguration bot, string userMessage, ConversationSession? session)
         {
+            using var imageGenerationScope = _imageGenerationContextAccessor.Push(
+                new ImageGenerationExecutionContext(
+                    e.Message.Id,
+                    e.Channel.Id,
+                    e.Author.Id,
+                    e.Channel.GuildId,
+                    IsAuto: bot.SupportsFunctionCalling));
+
             await RunWithTypingIndicatorAsync(e.Channel, async () =>
             {
                 try
@@ -159,6 +215,21 @@ namespace TheSexy6BotWorker.Handlers
 
                     var response = await GetChatMessageWithManualFallbackAsync(chatService, chatHistory, bot.Settings);
                     var responseContent = response.Content ?? string.Empty;
+                    var imageResult = _imageGenerationContextAccessor.ConsumeLastResult();
+
+                    DiscordEmbed? responseEmbed = null;
+                    if (imageResult?.IsNewGeneration == true)
+                    {
+                        if (imageResult.Success)
+                        {
+                            responseContent = ImageResponseFormatter.BuildContent(imageResult, responseContent);
+                            responseEmbed = ImageResponseFormatter.BuildEmbed(imageResult);
+                        }
+                        else if (string.IsNullOrWhiteSpace(responseContent))
+                        {
+                            responseContent = imageResult.ResponseText;
+                        }
+                    }
 
                     if (string.IsNullOrWhiteSpace(responseContent))
                         throw new InvalidOperationException("The model did not return a final text response after tool execution.");
@@ -167,9 +238,18 @@ namespace TheSexy6BotWorker.Handlers
                     {
                         session.RecordMessage(new ChatMessageContent(AuthorRole.User, currentMessage));
                         session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, responseContent));
+                        if (imageResult?.Success == true && imageResult.IsNewGeneration && imageResult.HistoryMarker is not null)
+                        {
+                            session.RecordMessage(new ChatMessageContent(AuthorRole.Assistant, imageResult.HistoryMarker.ToJson()));
+                        }
                     }
 
-                    await DiscordMessageSender.SendChunkedAsync(e, responseContent);
+                    await DiscordMessageSender.SendChunkedAsync(
+                        e,
+                        responseContent,
+                        responseEmbed,
+                        imageResult?.ImageBytes,
+                        imageResult?.BlobName);
 
                     if (bot.SupportsFunctionCalling)
                         await _statusService.RecordInteraction(e.Message.Content, responseContent);

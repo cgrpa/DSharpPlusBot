@@ -29,3 +29,7 @@ output "key_vault_name" {
 output "key_vault_uri" {
   value = azurerm_key_vault.this.vault_uri
 }
+
+output "image_generation_storage_account_name" {
+  value = azurerm_storage_account.image_generation.name
+}

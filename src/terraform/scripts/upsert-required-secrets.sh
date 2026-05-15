@@ -11,6 +11,7 @@ Options:
   --discord-token <value>     Discord token (or set DISCORD_TOKEN)
   --gemini-key <value>        Gemini API key (or set GEMINI_KEY)
   --grok-key <value>          Grok API key (or set GROK_KEY)
+  --openrouter-key <value>    OpenRouter API key (or set OPENROUTER_API_KEY)
   --tavily-key <value>        Tavily API key (or set TAVILY_API_KEY)
   --allow-partial             Allow partial updates (default is all-or-nothing)
   --non-interactive           Fail on missing inputs instead of prompting
@@ -80,6 +81,7 @@ KEY_VAULT_NAME="${KEY_VAULT_NAME:-}"
 DISCORD_TOKEN="${DISCORD_TOKEN:-}"
 GEMINI_KEY="${GEMINI_KEY:-}"
 GROK_KEY="${GROK_KEY:-}"
+OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}"
 TAVILY_API_KEY="${TAVILY_API_KEY:-}"
 
 ALLOW_PARTIAL="false"
@@ -105,6 +107,11 @@ while [[ $# -gt 0 ]]; do
     --grok-key)
       require_option_value "--grok-key" "${2:-}"
       GROK_KEY="$2"
+      shift 2
+      ;;
+    --openrouter-key)
+      require_option_value "--openrouter-key" "${2:-}"
+      OPENROUTER_API_KEY="$2"
       shift 2
       ;;
     --tavily-key)
@@ -154,6 +161,7 @@ fi
 DISCORD_TOKEN="$(read_secret_if_missing "DiscordToken" "$DISCORD_TOKEN")"
 GEMINI_KEY="$(read_secret_if_missing "GeminiKey" "$GEMINI_KEY")"
 GROK_KEY="$(read_secret_if_missing "GrokKey" "$GROK_KEY")"
+OPENROUTER_API_KEY="$(read_secret_if_missing "OpenRouterApiKey" "$OPENROUTER_API_KEY")"
 TAVILY_API_KEY="$(read_secret_if_missing "TavilyApiKey" "$TAVILY_API_KEY")"
 
 missing_keys=()
@@ -175,6 +183,7 @@ append_secret_if_present() {
 append_secret_if_present "DiscordToken" "$DISCORD_TOKEN"
 append_secret_if_present "GeminiKey" "$GEMINI_KEY"
 append_secret_if_present "GrokKey" "$GROK_KEY"
+append_secret_if_present "OpenRouterApiKey" "$OPENROUTER_API_KEY"
 append_secret_if_present "TavilyApiKey" "$TAVILY_API_KEY"
 
 if [[ "$ALLOW_PARTIAL" != "true" && ${#missing_keys[@]} -gt 0 ]]; then

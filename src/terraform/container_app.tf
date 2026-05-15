@@ -45,6 +45,11 @@ resource "azurerm_container_app" "this" {
           secret_name = env.value
         }
       }
+
+      env {
+        name  = "ImageGeneration__StorageAccountName"
+        value = azurerm_storage_account.image_generation.name
+      }
     }
   }
 
