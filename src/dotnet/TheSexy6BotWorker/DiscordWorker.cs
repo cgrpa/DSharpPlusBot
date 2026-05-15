@@ -89,11 +89,6 @@ namespace TheSexy6BotWorker
                         {
                             options.OpenRouterApiKey = _configuration["OpenRouterApiKey"];
                         }
-
-                        if (string.IsNullOrWhiteSpace(options.StorageAccountName))
-                        {
-                            options.StorageAccountName = _configuration["ImageStorageAccountName"];
-                        }
                     });
                 services.AddHttpClient("TavilyApiClient", (sp, client) =>
                 {
